@@ -1,0 +1,13 @@
+version: 2
+project_name: fb
+builds:
+  - main: ./cmd/fb
+    env: [CGO_ENABLED=0]
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/mkrajinovic/fbctl/internal/cli.Version={{.Version}}
+archives:
+  - formats: [tar.gz]
+checksum:
+  name_template: checksums.txt
