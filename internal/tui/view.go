@@ -32,6 +32,8 @@ func (m Model) View() string {
 
 	body := m.body(w)
 	switch {
+	case m.input != nil:
+		body = m.inputView()
 	case m.confirm != nil:
 		body = modalBox.Render(ui.Bold.Render(m.confirm.prompt) + "\n\n" + ui.Muted.Render("y / enter = confirm   any other key = cancel"))
 	case m.qr != "":
@@ -106,6 +108,9 @@ func (m Model) footer() string {
 	}
 	switch m.tab {
 	case tabOverview:
+		if len(m.opt.Routers) > 1 {
+			add("A", "all routers")
+		}
 		add("R", "reconnect")
 		add("B", "reboot")
 	case tabHosts:
@@ -113,14 +118,27 @@ func (m Model) footer() string {
 		add("a", "active only")
 		add("s", "sort")
 		add("enter", "details")
+		add("n", "rename")
 		add("w", "wake")
-		add("b/u", "block/unblock internet")
+		add("b/u", "block/unblock")
 	case tabWLAN:
 		add("space", "toggle")
 		add("c", "QR code")
+		add("p", "password")
+		add("P", "change password")
+	case tabCalls:
+		add("f", "filter")
+		add("d", "days")
+	case tabContacts:
+		add("/", "search")
+		if len(m.books) > 1 {
+			add("p", "next phonebook")
+		}
 	case tabHome:
-		add("space", "switch")
+		add("space", "switch / off")
 		add("+/-", "temp")
+	case tabLog:
+		add("g", "group")
 	}
 	add("r", "refresh")
 	add("?", "help")
@@ -152,6 +170,8 @@ func (m Model) body(w int) string {
 		return m.wlanView(w)
 	case tabCalls:
 		return m.callsView(w)
+	case tabContacts:
+		return m.contactsView(w)
 	case tabHome:
 		return m.homeView(w)
 	case tabMesh:
@@ -285,7 +305,8 @@ func (m Model) hostsView(w int) string {
 	}
 	out := ui.Card(title, strings.Join(lines, "\n"), w)
 	if m.detail && m.cursor[tabHosts] < len(hosts) {
-		out += "\n" + hostDetail(hosts[m.cursor[tabHosts]], w)
+		h := hosts[m.cursor[tabHosts]]
+		out += "\n" + hostDetail(h, m.access[h.IP], w)
 	}
 	return out
 }
@@ -337,9 +358,10 @@ func (m Model) callsView(w int) string {
 	if m.calls == nil {
 		lines = append(lines, ui.Muted.Render("loading…"))
 	}
-	from, to := m.listWindow(len(m.calls), m.cursor[tabCalls])
+	calls := m.visibleCalls()
+	from, to := m.listWindow(len(calls), m.cursor[tabCalls])
 	for i := from; i < to; i++ {
-		c := m.calls[i]
+		c := calls[i]
 		dur := ""
 		if c.Type != fritz.CallMissed {
 			dur = fmt.Sprintf("%d:%02d", int(c.Duration.Hours()), int(c.Duration.Minutes())%60)
@@ -347,7 +369,8 @@ func (m Model) callsView(w int) string {
 		line := fmt.Sprintf("%s %s  %-20s %-24s %5s  %s", callGlyph(c.Type), c.Date.Format("2006-01-02 15:04"), trunc(orDash(c.Number), 20), trunc(c.Name, 24), dur, ui.Muted.Render(c.Device))
 		lines = append(lines, mark(i == m.cursor[tabCalls], line, w))
 	}
-	return out + "\n" + ui.Card(fmt.Sprintf("Call list · last 30 days · %d", len(m.calls)), strings.Join(lines, "\n"), w)
+	title := fmt.Sprintf("Call list · %s · %s · %d", daysLabel(callDays[m.callDays]), callFilters[m.callFilter], len(calls))
+	return out + "\n" + ui.Card(title, strings.Join(lines, "\n"), w)
 }
 
 func (m Model) homeView(w int) string {
@@ -407,15 +430,18 @@ func helpText() string {
 	return strings.Join([]string{
 		ui.Bold.Render("Keys"),
 		"",
-		"tab / shift+tab, 1–7   switch tab",
+		"tab / shift+tab, 1–8   switch tab",
 		"[ / ]                  previous / next router",
 		"j k / ↑ ↓              move",
 		"r                      refresh",
 		"",
-		"Overview   R reconnect · B reboot",
-		"Hosts      / filter · a active only · s sort · enter details · w wake-on-LAN · b/u block/unblock internet",
-		"WLAN       space toggle · c QR code",
-		"Smart Home space switch · + / - target temperature",
+		"Overview   A all routers · R reconnect · B reboot",
+		"Hosts      / filter · a active only · s sort · enter details · n rename · w wake-on-LAN · b/u block/unblock internet",
+		"WLAN       space toggle · c QR code · p show password · P change password",
+		"Calls      f all/missed/in/out · d 30/90/all/7 days",
+		"Contacts   / search · p next phonebook",
+		"Smart Home space switch (thermostat: off ↔ 20 °C) · + / - target temperature",
+		"Log        g all/sys/net/fon/wlan/usb",
 		"",
 		"q / ctrl+c quit",
 	}, "\n")

@@ -63,14 +63,21 @@ passwords, WLAN keys and session IDs redacted). Exit code 3 means wrong credenti
 
 ## TUI
 
-Tabs: Overview · Hosts · Mesh · WLAN · Calls · Smart Home · Log (`tab`/`1–7`). `[` `]` switch routers,
-`j`/`k` move, `r` refresh, `?` help.
+Tabs: Overview · Hosts · Mesh · WLAN · Calls · Contacts · Smart Home · Log (`tab`/`1–8`). `[` `]` switch
+routers, `j`/`k` move, `r` refresh, `?` help.
 
-- Overview: `R` reconnect, `B` reboot (both confirm).
-- Hosts: `/` filter, `a` active only, `s` cycle sort (ip → name → active), `enter` details, `w` wake,
-  `b`/`u` block/unblock internet (blocking confirms).
-- WLAN: `space` toggle (disabling a main network confirms), `c` QR code.
-- Smart Home: `space` switch, `+`/`-` thermostat in 0.5 °C steps.
+- Overview: `A` status of all routers (like `fb status --all`), `R` reconnect, `B` reboot (both confirm).
+- Hosts: `/` filter, `a` active only, `s` cycle sort (ip → name → active), `enter` details including
+  internet access, `n` rename, `w` wake, `b`/`u` block/unblock internet (blocking confirms).
+- WLAN: `space` toggle (disabling a main network confirms), `c` QR code, `p` show password, `P` change
+  password (pre-filled with a generated one you can edit, confirms, then shows the new join QR code).
+- Calls: `f` cycle all/missed/in/out, `d` cycle 30/90/all/7 days. Live call monitor pane on top.
+- Contacts: `/` search name or number, `p` next phonebook.
+- Smart Home: `space` switch (thermostat: off ↔ 20 °C), `+`/`-` thermostat in 0.5 °C steps.
+- Log: `g` cycle all/sys/net/fon/wlan/usb.
+
+CLI only, on purpose: `router add/remove/use/trust/test` (password prompt and keychain), `raw`, `exporter`
+and `completion`.
 
 Live rates are polled every 3 s with at most one request in flight per router; full status every 30 s.
 

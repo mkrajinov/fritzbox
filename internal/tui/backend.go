@@ -26,6 +26,11 @@ type Backend interface {
 	Mesh(ctx context.Context) ([]fritz.MeshNode, error)
 	DeviceLog(ctx context.Context, group string) ([]fritz.LogEvent, error)
 	SetInternetBlocked(ctx context.Context, ip string, blocked bool) error
+	WANAccess(ctx context.Context, ip string) (access string, disallowed bool, err error)
+	RenameHost(ctx context.Context, mac, name string) error
+	SetWLANPassword(ctx context.Context, index int, password string) error
+	Phonebooks(ctx context.Context) ([]fritz.Phonebook, error)
+	Contacts(ctx context.Context, id int) (fritz.Phonebook, []fritz.Contact, error)
 }
 
 // Connector opens a backend for a router profile name and returns the host for the call monitor.

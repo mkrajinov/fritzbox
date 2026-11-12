@@ -8,7 +8,7 @@ import (
 	"github.com/mkrajinovic/fbctl/internal/ui"
 )
 
-func hostDetail(h fritz.Host, w int) string {
+func hostDetail(h fritz.Host, access string, w int) string {
 	state := ui.Muted.Render(ui.GlyphOff + " inactive")
 	if h.Active {
 		state = ui.OK.Render(ui.GlyphOn + " active")
@@ -29,6 +29,7 @@ func hostDetail(h fritz.Host, w int) string {
 		row("ip", h.IP, net),
 		row("id", h.MAC, "MAC address"),
 		row("⇄", orDash(link), "connection"),
+		row("⇅", accessText(access), "internet access"),
 	}
 	return ui.Card("Details", strings.Join(rows, "\n"), w)
 }
@@ -72,5 +73,9 @@ func (m Model) logView(w int) string {
 		line := fmt.Sprintf("%s  %s  %s", ui.Muted.Render(e.Time.Format("01-02 15:04:05")), ui.Muted.Render(fmt.Sprintf("%-4s", e.Group)), trunc(e.Msg, msgW))
 		lines = append(lines, mark(i == m.cursor[tabLog], line, w))
 	}
-	return ui.Card(fmt.Sprintf("Event log · %d events", len(m.logEvs)), strings.Join(lines, "\n"), w)
+	group := "all"
+	if g := logGroups[m.logGroup]; g != "" {
+		group = g
+	}
+	return ui.Card(fmt.Sprintf("Event log · %s · %d events", group, len(m.logEvs)), strings.Join(lines, "\n"), w)
 }

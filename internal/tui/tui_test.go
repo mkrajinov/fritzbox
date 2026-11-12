@@ -56,6 +56,10 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}}
 	case "enter":
 		return tea.KeyMsg{Type: tea.KeyEnter}
+	case "esc":
+		return tea.KeyMsg{Type: tea.KeyEsc}
+	case "ctrl+u":
+		return tea.KeyMsg{Type: tea.KeyCtrlU}
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
@@ -139,7 +143,7 @@ func TestWLANToggleNeedsConfirmForMainNetwork(t *testing.T) {
 
 func TestSmartHomeControls(t *testing.T) {
 	m, fb := setup(t)
-	m = press(t, m, "6")
+	m = press(t, m, "7")
 	v := plain(m.View())
 	if !strings.Contains(v, "Desk lamp") || !strings.Contains(v, "12.5 W") || !strings.Contains(v, "21.0°C") {
 		t.Fatalf("home view:\n%s", v)
@@ -225,9 +229,9 @@ func TestMeshAndLogTabs(t *testing.T) {
 			t.Errorf("mesh missing %q\n%s", want, v)
 		}
 	}
-	m = press(t, m, "7")
+	m = press(t, m, "8")
 	v = plain(m.View())
-	if !strings.Contains(v, "Event log · 2 events") || !strings.Contains(v, "Internet connection established") {
+	if !strings.Contains(v, "Event log · all · 2 events") || !strings.Contains(v, "Internet connection established") {
 		t.Fatalf("log:\n%s", v)
 	}
 }
@@ -245,5 +249,98 @@ func TestBlockInternetConfirms(t *testing.T) {
 	press(t, m, "u")
 	if fb.Blocked["192.168.178.20"] {
 		t.Fatal("laptop not unblocked")
+	}
+}
+
+func TestWLANPasswordShowAndChange(t *testing.T) {
+	m, fb := setup(t)
+	m = press(t, m, "4", "j", "j", "p") // guest network
+	if v := plain(m.View()); !strings.Contains(v, "guest;pass") {
+		t.Fatalf("password not shown:\n%s", v)
+	}
+	m = press(t, m, "x", "P")
+	v := plain(m.View())
+	if !strings.Contains(v, "New password for Guest") || !strings.Contains(v, "generated for you") {
+		t.Fatalf("no input modal:\n%s", v)
+	}
+	// Too short is rejected in place.
+	m = press(t, m, "ctrl+u", "s", "h", "o", "r", "t", "enter")
+	if v := plain(m.View()); !strings.Contains(v, "8–63 characters, got 5") {
+		t.Fatalf("no validation:\n%s", v)
+	}
+	m = press(t, m, "ctrl+u")
+	m = press(t, m, strings.Split("correct-horse", "")...)
+	m = press(t, m, "enter")
+	if v := plain(m.View()); !strings.Contains(v, "Change the password of Guest") {
+		t.Fatalf("no confirm:\n%s", v)
+	}
+	m = press(t, m, "y")
+	c := fb.CallsTo("wlanconfig3", "SetSecurityKeys")
+	if len(c) != 1 || !strings.Contains(c[0].Body, "<NewKeyPassphrase>correct-horse</NewKeyPassphrase>") {
+		t.Fatalf("SetSecurityKeys: %+v", c)
+	}
+	if v := plain(m.View()); !strings.Contains(v, "new password") || !strings.Contains(v, "password changed") {
+		t.Fatalf("no result QR:\n%s", v)
+	}
+}
+
+func TestPasswordChangeEscCancels(t *testing.T) {
+	m, fb := setup(t)
+	m = press(t, m, "4", "j", "j", "P", "esc")
+	if len(fb.CallsTo("wlanconfig3", "SetSecurityKeys")) != 0 || !strings.Contains(plain(m.View()), "cancelled") {
+		t.Fatalf("esc did not cancel:\n%s", plain(m.View()))
+	}
+}
+
+func TestHostRenameAndAccessDetail(t *testing.T) {
+	m, fb := setup(t)
+	m = press(t, m, "2", "enter") // nas
+	if v := plain(m.View()); !strings.Contains(v, "internet access") || !strings.Contains(v, "allowed") {
+		t.Fatalf("no access line:\n%s", v)
+	}
+	m = press(t, m, "b", "y")
+	if v := plain(m.View()); !strings.Contains(v, "blocked") {
+		t.Fatalf("access not refreshed:\n%s", v)
+	}
+	m = press(t, m, "n", "ctrl+u")
+	m = press(t, m, strings.Split("storage", "")...)
+	press(t, m, "enter")
+	c := fb.CallsTo("hosts", "X_AVM-DE_SetHostNameByMACAddress")
+	if len(c) != 1 || !strings.Contains(c[0].Body, "<NewHostName>storage</NewHostName>") || !strings.Contains(c[0].Body, "AA:BB:CC:00:00:02") {
+		t.Fatalf("rename: %+v", c)
+	}
+}
+
+func TestCallsFilterContactsAndLogGroup(t *testing.T) {
+	m, fb := setup(t)
+	m = press(t, m, "5", "f")
+	if v := plain(m.View()); !strings.Contains(v, "last 30 days · missed") {
+		t.Fatalf("calls filter:\n%s", v)
+	}
+	m = press(t, m, "d")
+	if v := plain(m.View()); !strings.Contains(v, "last 90 days") {
+		t.Fatalf("calls days:\n%s", v)
+	}
+	m = press(t, m, "6")
+	if v := plain(m.View()); !strings.Contains(v, "Alice") || !strings.Contains(v, "Bob") {
+		t.Fatalf("contacts:\n%s", v)
+	}
+	m = press(t, m, "/", "b", "o", "b", "enter")
+	if v := plain(m.View()); strings.Contains(v, "Alice") || !strings.Contains(v, "Bob") {
+		t.Fatalf("contacts search:\n%s", v)
+	}
+	m = press(t, m, "8", "g")
+	if v := plain(m.View()); !strings.Contains(v, "Event log · sys") {
+		t.Fatalf("log group:\n%s", v)
+	}
+	_ = fb
+}
+
+func TestAllRouters(t *testing.T) {
+	m, _ := setup(t)
+	m = press(t, m, "A")
+	v := plain(m.View())
+	if !strings.Contains(v, "All routers") || strings.Count(v, "FRITZ!Box 7590 AX") < 2 || !strings.Contains(v, "office") {
+		t.Fatalf("all routers:\n%s", v)
 	}
 }

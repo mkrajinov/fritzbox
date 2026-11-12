@@ -25,6 +25,7 @@ const (
 	tabMesh
 	tabWLAN
 	tabCalls
+	tabContacts
 	tabHome
 	tabLog
 	tabCount
@@ -33,7 +34,7 @@ const (
 func (t tab) title() string {
 	return [...]string{
 		ui.GlyphStatus + " Overview", ui.GlyphHosts + " Hosts", ui.GlyphMesh + " Mesh", ui.GlyphWLAN + " WLAN",
-		ui.GlyphCalls + " Calls", ui.GlyphHome + " Smart Home", ui.GlyphLog + " Log",
+		ui.GlyphCalls + " Calls", ui.GlyphContacts + " Contacts", ui.GlyphHome + " Smart Home", ui.GlyphLog + " Log",
 	}[t]
 }
 
@@ -83,6 +84,17 @@ type Model struct {
 	activeOnly bool   // hosts: hide inactive
 	hostSort   string // ip, name, active
 	detail     bool   // hosts: show details of the selected host
+	access     map[string]string
+
+	callFilter int // index into callFilters
+	callDays   int // index into callDays
+	logGroup   int // index into logGroups
+
+	books    []fritz.Phonebook
+	book     int
+	contacts []fritz.Contact
+
+	input *inputPrompt
 
 	cursor    [tabCount]int
 	filter    textinput.Model
@@ -108,7 +120,7 @@ type confirmation struct {
 func New(o Options) Model {
 	ti := textinput.New()
 	ti.Prompt = "/ "
-	ti.Placeholder = "filter hosts"
+	ti.Placeholder = "filter"
 	idx := max(slices.Index(o.Routers, o.Current), 0)
 	return Model{opt: o, router: idx, filter: ti, hostSort: "ip"}
 }
@@ -220,7 +232,8 @@ func (m *Model) switchRouter(delta int) tea.Cmd {
 	m.backend, m.connErr, m.status = nil, nil, nil
 	m.upHist, m.downHist = nil, nil
 	m.hosts, m.wlans, m.calls, m.devs, m.events = nil, nil, nil, nil, nil
-	m.mesh, m.logEvs, m.detail = nil, nil, false
+	m.mesh, m.logEvs, m.detail, m.access = nil, nil, false, nil
+	m.books, m.book, m.contacts, m.input = nil, 0, nil, nil
 	m.rateBusy, m.statusBusy = false, false
 	m.cursor = [tabCount]int{}
 	m.flash = ""
@@ -272,10 +285,11 @@ func (m Model) fetchTab(t tab) tea.Cmd {
 			return meshMsg{gen, n, err}
 		}
 	case tabLog:
+		group := logGroups[m.logGroup]
 		return func() tea.Msg {
 			c, cancel := ctx()
 			defer cancel()
-			e, err := b.DeviceLog(c, "")
+			e, err := b.DeviceLog(c, group)
 			return logMsg{gen, e, err}
 		}
 	case tabWLAN:
@@ -285,11 +299,14 @@ func (m Model) fetchTab(t tab) tea.Cmd {
 			w, err := b.WLANs(c)
 			return wlansMsg{gen, w, err}
 		}
+	case tabContacts:
+		return m.fetchContacts(m.book)
 	case tabCalls:
+		days := callDays[m.callDays]
 		return func() tea.Msg {
 			c, cancel := ctx()
 			defer cancel()
-			calls, err := b.Calls(c, 30)
+			calls, err := b.Calls(c, days)
 			return callsMsg{gen, calls, err}
 		}
 	case tabHome:
@@ -456,7 +473,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.gen == m.gen {
 			m.calls = msg.calls
 			m.setFlash(msg.err)
-			m.clampCursor(tabCalls, len(m.calls))
+			m.clampCursor(tabCalls, len(m.visibleCalls()))
 		}
 		return m, nil
 	case meshMsg:
@@ -471,6 +488,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.logEvs = msg.evs
 			m.setFlash(msg.err)
 			m.clampCursor(tabLog, len(m.logEvs))
+		}
+		return m, nil
+	case contactsMsg:
+		if msg.gen == m.gen {
+			m.books, m.book, m.contacts = msg.books, msg.book, msg.contacts
+			if m.contacts == nil {
+				m.contacts = []fritz.Contact{}
+			}
+			m.setFlash(msg.err)
+			m.clampCursor(tabContacts, len(m.visibleContacts()))
+		}
+		return m, nil
+	case accessMsg:
+		if msg.gen == m.gen {
+			if m.access == nil {
+				m.access = map[string]string{}
+			}
+			m.access[msg.ip] = msg.access
+			if msg.err != nil {
+				m.access[msg.ip] = "unknown (" + msg.err.Error() + ")"
+			}
+		}
+		return m, nil
+	case pwChangedMsg:
+		if msg.gen != m.gen {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.setFlash(msg.err)
+			return m, nil
+		}
+		m.flash, m.flashOK = fmt.Sprintf("%s (%s) password changed", msg.w.Label(), msg.w.SSID), true
+		m.qr = renderQR(msg.w, msg.pw) + "\n" + row("⚿", msg.pw, "new password")
+		return m, m.fetchTab(tabWLAN)
+	case allStatusMsg:
+		if msg.gen == m.gen {
+			m.qr = renderAllStatus(msg.rows)
 		}
 		return m, nil
 	case devsMsg:
@@ -490,6 +544,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.flash, m.flashOK = msg.text, true
+		if msg.refresh == tabHosts {
+			m.access = nil // block/unblock changes it
+			return m, tea.Batch(m.fetchTab(tabHosts), m.detailAccess())
+		}
 		return m, m.fetchTab(msg.refresh)
 
 	case qrMsg:
@@ -531,6 +589,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.filtering {
 		var cmd tea.Cmd
 		m.filter, cmd = m.filter.Update(msg)
+		return m, cmd
+	}
+	if m.input != nil {
+		var cmd tea.Cmd
+		m.input.ti, cmd = m.input.ti.Update(msg)
 		return m, cmd
 	}
 	return m, nil
@@ -599,7 +662,9 @@ func (m Model) listLen(t tab) int {
 	case tabWLAN:
 		return len(m.wlans)
 	case tabCalls:
-		return len(m.calls)
+		return len(m.visibleCalls())
+	case tabContacts:
+		return len(m.visibleContacts())
 	case tabHome:
 		return len(m.devs)
 	case tabMesh:
@@ -629,6 +694,9 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if m.input != nil {
+		return m.inputKey(k)
+	}
 	if m.qr != "" || m.help {
 		m.qr, m.help = "", false
 		return m, nil
@@ -645,7 +713,7 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		default:
 			var cmd tea.Cmd
 			m.filter, cmd = m.filter.Update(k)
-			m.clampCursor(tabHosts, len(m.visibleHosts()))
+			m.clampCursor(m.tab, m.listLen(m.tab))
 			return m, cmd
 		}
 		return m, nil
@@ -662,7 +730,7 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.setTab((m.tab + 1) % tabCount)
 	case "shift+tab", "left", "h":
 		return m.setTab((m.tab + tabCount - 1) % tabCount)
-	case "1", "2", "3", "4", "5", "6", "7":
+	case "1", "2", "3", "4", "5", "6", "7", "8":
 		return m.setTab(tab(key[0] - '1'))
 	case "]":
 		return m, m.switchRouter(1)
@@ -677,10 +745,10 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.fetchTab(m.tab)
 	case "down", "j":
 		m.cursor[m.tab] = min(m.cursor[m.tab]+1, max(m.listLen(m.tab)-1, 0))
-		return m, nil
+		return m, m.detailAccess()
 	case "up", "k":
 		m.cursor[m.tab] = max(m.cursor[m.tab]-1, 0)
-		return m, nil
+		return m, m.detailAccess()
 	}
 	if m.backend == nil {
 		return m, nil
@@ -689,6 +757,9 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) setTab(t tab) (tea.Model, tea.Cmd) {
+	if t != m.tab {
+		m.filter.SetValue("") // the filter belongs to the tab it was typed in
+	}
 	m.tab = t
 	m.flash = ""
 	return m, m.fetchTab(t)
@@ -713,6 +784,9 @@ func (m Model) tabKey(key string) (tea.Model, tea.Cmd) {
 					return b.Reboot(c)
 				}),
 			}
+		case "A":
+			m.flash, m.flashOK = "polling all routers…", true
+			return m, m.fetchAllStatus()
 		}
 	case tabHosts:
 		hosts := m.visibleHosts()
@@ -727,6 +801,12 @@ func (m Model) tabKey(key string) (tea.Model, tea.Cmd) {
 			m.hostSort = hostSorts[(slices.Index(hostSorts, m.hostSort)+1)%len(hostSorts)]
 		case "enter":
 			m.detail = !m.detail
+			return m, m.detailAccess()
+		case "n":
+			if cur < len(hosts) {
+				m.renameHost(hosts[cur])
+				return m, textinput.Blink
+			}
 		case "b", "u":
 			if cur < len(hosts) {
 				h, block := hosts[cur], key == "b"
@@ -778,6 +858,14 @@ func (m Model) tabKey(key string) (tea.Model, tea.Cmd) {
 				}
 				return qrMsg{gen: gen, text: renderQR(w, pw)}
 			}
+		case "p":
+			return m, m.showWLANPassword(w)
+		case "P":
+			if err := m.changeWLANPassword(w); err != nil {
+				m.setFlash(err)
+				return m, nil
+			}
+			return m, textinput.Blink
 		}
 	case tabHome:
 		if cur >= len(m.devs) {
@@ -790,6 +878,14 @@ func (m Model) tabKey(key string) (tea.Model, tea.Cmd) {
 				return m, m.action(d.Name+" toggled", tabHome, func(c context.Context, b Backend) error {
 					return b.SetSwitch(c, d.AIN, "toggle")
 				})
+			}
+			if d.Thermostat != nil { // space on a thermostat: off ↔ 20 °C
+				v := aha.TempOff
+				if d.Thermostat.Target == aha.TempOff {
+					v = 40
+				}
+				m.devs[cur].Thermostat.Target = v
+				return m, m.setThermostat(d, v)
 			}
 		case "+", "=", "-":
 			if d.Thermostat == nil {
@@ -805,9 +901,35 @@ func (m Model) tabKey(key string) (tea.Model, tea.Cmd) {
 				v = min(56, v+1)
 			}
 			m.devs[cur].Thermostat.Target = v // optimistic; refreshed after the call
-			return m, m.action(fmt.Sprintf("%s target %s", d.Name, aha.DecodeTemp(v)), tabHome, func(c context.Context, b Backend) error {
-				return b.SetThermostatRaw(c, d.AIN, v)
-			})
+			return m, m.setThermostat(d, v)
+		}
+	case tabCalls:
+		switch key {
+		case "f":
+			m.callFilter = (m.callFilter + 1) % len(callFilters)
+			m.clampCursor(tabCalls, len(m.visibleCalls()))
+		case "d":
+			m.callDays = (m.callDays + 1) % len(callDays)
+			m.calls = nil
+			return m, m.fetchTab(tabCalls)
+		}
+	case tabContacts:
+		switch key {
+		case "/":
+			m.filtering = true
+			return m, m.filter.Focus()
+		case "p":
+			if len(m.books) > 1 {
+				m.book = (m.book + 1) % len(m.books)
+				m.contacts, m.cursor[tabContacts] = nil, 0
+				return m, m.fetchContacts(m.book)
+			}
+		}
+	case tabLog:
+		if key == "g" {
+			m.logGroup = (m.logGroup + 1) % len(logGroups)
+			m.logEvs = nil
+			return m, m.fetchTab(tabLog)
 		}
 	}
 	return m, nil
