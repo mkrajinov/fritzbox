@@ -45,11 +45,22 @@ type Box struct {
 	Plug      string                       // "1"/"0" switch state of the fake plug
 	Target    int                          // thermostat target
 	Blocked   map[string]bool              // IP → internet blocked (X_AVM-DE_HostFilter)
+
+	// Second factor (X_AVM-DE_Auth): actions in NeedsToken fail with 866 unless they carry
+	// AuthToken in the SOAP header after the user "confirmed". ConfirmAfter is the number of
+	// GetState polls after which the fake reports "authenticated" (0 = never).
+	NeedsToken   map[string]bool
+	ConfirmAfter int
+	AuthState    string
+	authPolls    int
 }
+
+// AuthToken is the token the fake hands out.
+const AuthToken = "2C0A2110-0000-4000-8000-FAKE00000001"
 
 // New starts the fake box.
 func New() *Box {
-	b := &Box{Responses: defaultResponses(), Faults: map[string]int{}, Plug: "1", Target: 42, Blocked: map[string]bool{}}
+	b := &Box{Responses: defaultResponses(), Faults: map[string]int{}, Plug: "1", Target: 42, Blocked: map[string]bool{}, NeedsToken: map[string]bool{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/tr64desc.xml", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, desc) })
 	mux.HandleFunc("/upnp/control/", func(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +80,8 @@ func New() *Box {
 		b.mu.Unlock()
 		io.WriteString(w, deviceLog)
 	})
+	mux.HandleFunc("/backup.export", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, BackupData) })
+	mux.HandleFunc("/tamcalls.xml", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, tamMessages) })
 	mux.HandleFunc("/phonebook.lua", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, phonebook) })
 	mux.HandleFunc("/login_sid.lua", b.login)
 	mux.HandleFunc("/webservices/homeautoswitch.lua", b.homeauto)
@@ -153,7 +166,13 @@ func (b *Box) soap(w http.ResponseWriter, r *http.Request) {
 			b.Responses[key] = map[string]string{"NewWANAccess": acc, "NewDisallow": dis}
 		}
 	}
+	if svc == "x_auth" {
+		b.authAction(action, string(body))
+	}
 	code, fault := b.Faults[key]
+	if b.NeedsToken[key] && (between(string(body), `s:mustUnderstand="1">`, "</avm:token>") != AuthToken || b.AuthState != "authenticated") {
+		code, fault = 866, true
+	}
 	out, ok := b.Responses[key]
 	b.mu.Unlock()
 	w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
@@ -167,9 +186,39 @@ func (b *Box) soap(w http.ResponseWriter, r *http.Request) {
 	}
 	var args strings.Builder
 	for k, v := range out {
+		// Like the real box, absolute URLs name the box (fritz.box), not the address fb used.
+		if _, port, ok := strings.Cut(r.Host, ":"); ok {
+			v = strings.ReplaceAll(v, "{PORT}", port)
+		}
 		fmt.Fprintf(&args, "<%s>%s</%s>", k, xmlEscape(v), k)
 	}
 	fmt.Fprintf(w, respTmpl, action, typ, args.String(), action)
+}
+
+// authAction simulates X_AVM-DE_Auth. Called with b.mu held.
+func (b *Box) authAction(action, body string) {
+	key := "x_auth#" + action
+	switch action {
+	case "SetConfig":
+		switch between(body, "<NewAction>", "</NewAction>") {
+		case "start":
+			b.AuthState, b.authPolls = "waitingforauth", 0
+			b.Responses[key] = map[string]string{"NewState": b.AuthState, "NewToken": AuthToken, "NewMethods": "button,dtmf;*1234"}
+		case "stop":
+			b.AuthState = "stopped"
+			b.Responses[key] = map[string]string{"NewState": b.AuthState, "NewToken": "", "NewMethods": ""}
+		}
+	case "GetState":
+		if between(body, `s:mustUnderstand="1">`, "</avm:token>") != AuthToken {
+			b.Responses[key] = map[string]string{"NewState": "failure"}
+			return
+		}
+		b.authPolls++
+		if b.ConfirmAfter > 0 && b.authPolls >= b.ConfirmAfter && b.AuthState == "waitingforauth" {
+			b.AuthState = "authenticated"
+		}
+		b.Responses[key] = map[string]string{"NewState": b.AuthState}
+	}
 }
 
 func between(s, a, b string) string {
@@ -230,6 +279,10 @@ func (b *Box) homeauto(w http.ResponseWriter, r *http.Request) {
 	case "setswitchtoggle":
 		b.Plug = map[string]string{"1": "0", "0": "1"}[b.Plug]
 		io.WriteString(w, b.Plug+"\n")
+	case "gettemplatelistinfos":
+		io.WriteString(w, templateList)
+	case "applytemplate":
+		io.WriteString(w, "\n")
 	case "sethkrtsoll":
 		fmt.Sscan(q.Get("param"), &b.Target)
 		io.WriteString(w, q.Get("param")+"\n")
@@ -255,33 +308,71 @@ func defaultResponses() map[string]map[string]string {
 			"Newus_current_bps": "1000,2000,3000", "Newds_current_bps": "50000,40000,30000",
 			"Newmax_us": "5000000", "Newmax_ds": "31250000",
 		},
-		"wanpppconn1#GetStatusInfo":              {"NewConnectionStatus": "Connected", "NewLastConnectionError": "ERROR_NONE", "NewUptime": "3600"},
-		"wanpppconn1#GetExternalIPAddress":       {"NewExternalIPAddress": "203.0.113.7"},
-		"wanpppconn1#ForceTermination":           {},
-		"deviceconfig#Reboot":                    {},
-		"hosts#X_AVM-DE_GetHostListPath":         {"NewX_AVM-DE_HostListPath": "/devicehostlist.lua?sid=deadbeef"},
-		"hosts#X_AVM-DE_WakeOnLANByMACAddress":   {},
-		"hosts#X_AVM-DE_GetMeshListPath":         {"NewX_AVM-DE_MeshListPath": "/meshlist.lua?sid=deadbeef"},
-		"hosts#X_AVM-DE_SetHostNameByMACAddress": {},
-		"deviceinfo#X_AVM-DE_GetDeviceLogPath":   {"NewDeviceLogPath": "/devicelog.lua?sid=deadbeef"},
-		"wlanconfig3#SetSecurityKeys":            {},
-		"wlanconfig1#GetInfo":                    {"NewEnable": "1", "NewStatus": "Up", "NewChannel": "6", "NewSSID": "Home", "NewBeaconType": "11iandWPA3", "NewStandard": "ax", "NewX_AVM-DE_FrequencyBand": "2400"},
-		"wlanconfig2#GetInfo":                    {"NewEnable": "1", "NewStatus": "Up", "NewChannel": "36", "NewSSID": "Home", "NewBeaconType": "11iandWPA3", "NewStandard": "ax", "NewX_AVM-DE_FrequencyBand": "5000"},
-		"wlanconfig3#GetInfo":                    {"NewEnable": "0", "NewStatus": "Disabled", "NewChannel": "6", "NewSSID": "Guest", "NewBeaconType": "11i", "NewStandard": "n", "NewAllowedCharsPSK": "0123456789ABCDEFabcdef", "NewMaxCharsPSK": "64"},
-		"wlanconfig1#GetTotalAssociations":       {"NewTotalAssociations": "4"},
-		"wlanconfig2#GetTotalAssociations":       {"NewTotalAssociations": "7"},
-		"wlanconfig3#GetTotalAssociations":       {"NewTotalAssociations": "0"},
-		"wlanconfig1#GetBeaconAdvertisement":     {"NewBeaconAdvertisementEnabled": "1"},
-		"wlanconfig2#GetBeaconAdvertisement":     {"NewBeaconAdvertisementEnabled": "1"},
-		"wlanconfig3#GetBeaconAdvertisement":     {"NewBeaconAdvertisementEnabled": "1"},
-		"wlanconfig1#SetEnable":                  {},
-		"wlanconfig2#SetEnable":                  {},
-		"wlanconfig3#SetEnable":                  {},
-		"wlanconfig3#GetSecurityKeys":            {"NewKeyPassphrase": "guest;pass"},
-		"x_contact#GetCallList":                  {"NewCallListURL": "/calllist.lua?sid=deadbeef"},
-		"x_contact#GetPhonebookList":             {"NewPhonebookList": "0,1"},
-		"x_contact#GetPhonebook":                 {"NewPhonebookName": "Telefonbuch", "NewPhonebookURL": "/phonebook.lua?sid=deadbeef&pbid=0"},
-		"lanconfigsecurity#X_AVM-DE_GetUserList": {"NewX_AVM-DE_UserList": `<List><Username last_user="0">admin</Username><Username last_user="1">fbctl</Username></List>`},
+		"wanpppconn1#GetStatusInfo":                   {"NewConnectionStatus": "Connected", "NewLastConnectionError": "ERROR_NONE", "NewUptime": "3600"},
+		"wanpppconn1#GetExternalIPAddress":            {"NewExternalIPAddress": "203.0.113.7"},
+		"wanpppconn1#ForceTermination":                {},
+		"deviceconfig#Reboot":                         {},
+		"hosts#X_AVM-DE_GetHostListPath":              {"NewX_AVM-DE_HostListPath": "/devicehostlist.lua?sid=deadbeef"},
+		"hosts#X_AVM-DE_WakeOnLANByMACAddress":        {},
+		"hosts#X_AVM-DE_GetMeshListPath":              {"NewX_AVM-DE_MeshListPath": "/meshlist.lua?sid=deadbeef"},
+		"hosts#X_AVM-DE_SetHostNameByMACAddress":      {},
+		"deviceinfo#X_AVM-DE_GetDeviceLogPath":        {"NewDeviceLogPath": "/devicelog.lua?sid=deadbeef"},
+		"wlanconfig3#SetSecurityKeys":                 {},
+		"wlanconfig1#GetInfo":                         {"NewEnable": "1", "NewStatus": "Up", "NewChannel": "6", "NewSSID": "Home", "NewBeaconType": "11iandWPA3", "NewStandard": "ax", "NewX_AVM-DE_FrequencyBand": "2400"},
+		"wlanconfig2#GetInfo":                         {"NewEnable": "1", "NewStatus": "Up", "NewChannel": "36", "NewSSID": "Home", "NewBeaconType": "11iandWPA3", "NewStandard": "ax", "NewX_AVM-DE_FrequencyBand": "5000"},
+		"wlanconfig3#GetInfo":                         {"NewEnable": "0", "NewStatus": "Disabled", "NewChannel": "6", "NewSSID": "Guest", "NewBeaconType": "11i", "NewStandard": "n", "NewAllowedCharsPSK": "0123456789ABCDEFabcdef", "NewMaxCharsPSK": "64"},
+		"wlanconfig1#GetTotalAssociations":            {"NewTotalAssociations": "4"},
+		"wlanconfig2#GetTotalAssociations":            {"NewTotalAssociations": "7"},
+		"wlanconfig3#GetTotalAssociations":            {"NewTotalAssociations": "0"},
+		"wlanconfig1#GetBeaconAdvertisement":          {"NewBeaconAdvertisementEnabled": "1"},
+		"wlanconfig2#GetBeaconAdvertisement":          {"NewBeaconAdvertisementEnabled": "1"},
+		"wlanconfig3#GetBeaconAdvertisement":          {"NewBeaconAdvertisementEnabled": "1"},
+		"wlanconfig1#SetEnable":                       {},
+		"wlanconfig2#SetEnable":                       {},
+		"wlanconfig3#SetEnable":                       {},
+		"wlanconfig3#GetSecurityKeys":                 {"NewKeyPassphrase": "guest;pass"},
+		"x_contact#GetCallList":                       {"NewCallListURL": "/calllist.lua?sid=deadbeef"},
+		"x_contact#GetPhonebookList":                  {"NewPhonebookList": "0,1"},
+		"x_contact#GetPhonebook":                      {"NewPhonebookName": "Telefonbuch", "NewPhonebookURL": "/phonebook.lua?sid=deadbeef&pbid=0"},
+		"userif#X_AVM-DE_GetInfo":                     {"NewX_AVM-DE_AutoUpdateMode": "important", "NewX_AVM-DE_CurrentFwVersion": "154.08.02", "NewX_AVM-DE_UpdateSuccessful": "succeeded"},
+		"userif#X_AVM-DE_CheckUpdate":                 {},
+		"userif#X_AVM-DE_DoUpdate":                    {"NewUpgradeAvailable": "1", "NewX_AVM-DE_UpdateState": "Started"},
+		"userif#X_AVM-DE_SetConfig":                   {},
+		"deviceconfig#X_AVM-DE_GetConfigFile":         {"NewX_AVM-DE_ConfigFileUrl": "http://fritz.box:{PORT}/backup.export"},
+		"lanhostcfg#GetInfo":                          {"NewDHCPServerEnable": "1", "NewMinAddress": "192.168.178.20", "NewMaxAddress": "192.168.178.200", "NewIPRouters": "192.168.178.1", "NewSubnetMask": "255.255.255.0", "NewDNSServers": "192.168.178.1", "NewDomainName": "fritz.box"},
+		"lanhostcfg#SetAddressRange":                  {},
+		"x_remote#GetInfo":                            {"NewEnabled": "0", "NewPort": "443", "NewUsername": "", "NewLetsEncryptEnabled": "1", "NewLetsEncryptState": "valid"},
+		"x_remote#GetDDNSInfo":                        {"NewEnabled": "0", "NewProviderName": "", "NewDomain": ""},
+		"x_remote#SetEnable":                          {"NewPort": "44321"},
+		"x_remote#SetLetsEncryptEnable":               {},
+		"x_myfritz#GetInfo":                           {"NewEnabled": "1", "NewDeviceRegistered": "1", "NewDynDNSName": "abc123.myfritz.net", "NewState": "ok", "NewEmail": "me@example.org"},
+		"x_myfritz#SetMyFRITZ":                        {},
+		"x_tam#GetList":                               {"NewTAMList": `<List><TAMRunning>1</TAMRunning><Stick>0</Stick><Status>0</Status><Capacity>120</Capacity><Item><Index>0</Index><Display>1</Display><Enable>1</Enable><Name>Answering machine</Name></Item><Item><Index>1</Index><Display>0</Display><Enable>0</Enable><Name></Name></Item></List>`},
+		"x_tam#GetMessageList":                        {"NewURL": "/tamcalls.xml?sid=deadbeef"},
+		"x_tam#MarkMessage":                           {},
+		"x_tam#DeleteMessage":                         {},
+		"x_tam#SetEnable":                             {},
+		"x_contact#GetDeflections":                    {"NewDeflectionList": `<List><Item><DeflectionId>0</DeflectionId><Enable>0</Enable><Type>fromAll</Type><Number></Number><DeflectionToNumber>01701234567</DeflectionToNumber><Mode>eImmediately</Mode><Outgoing>030999</Outgoing><PhonebookID></PhonebookID></Item></List>`},
+		"x_contact#SetDeflectionEnable":               {},
+		"x_voip#X_AVM-DE_DialNumber":                  {},
+		"x_voip#X_AVM-DE_DialHangup":                  {},
+		"x_voip#X_AVM-DE_DialGetConfig":               {"NewX_AVM-DE_PhoneName": "DECT: Mobilteil 1"},
+		"hosts#X_AVM-DE_GetSpecificHostEntryByIP":     {"NewMACAddress": "AA:BB:CC:00:00:02", "NewActive": "1", "NewHostName": "nas", "NewX_AVM-DE_Model": "", "NewX_AVM-DE_Priority": "0", "NewX_AVM-DE_WANAccess": "granted", "NewX_AVM-DE_Disallow": "0", "NewX_AVM-DE_FilterProfileID": "filtprof1", "NewX_AVM-DE_AddTicketAvailable": "1"},
+		"hosts#X_AVM-DE_GetAutoWakeOnLANByMACAddress": {"NewAutoWOLEnabled": "0"},
+		"hosts#X_AVM-DE_SetAutoWakeOnLANByMACAddress": {},
+		"hosts#X_AVM-DE_SetPrioritizationByIP":        {},
+		"x_hostfilter#GetFilterProfiles":              {"NewFilterProfileList": `<List><Item><ID>filtprof1</ID><Name>Standard</Name></Item><Item><ID>filtprof3</ID><Name>Gast</Name></Item><Item><ID>filtprof5</ID><Name>Kids</Name></Item></List>`},
+		"x_hostfilter#GetHostEntryByIP":               {"NewFilterProfileID": "filtprof1", "NewTimeUsed": "35", "NewTimeMax": "120", "NewWANAccess": "granted"},
+		"x_hostfilter#AddHostEntryToFilterProfile":    {},
+		"x_hostfilter#AddTicketTimeToHostEntryByIP":   {"NewTimeUsed": "35", "NewTimeMax": "165"},
+		"wlanconfig1#X_AVM-DE_SetWPSConfig":           {"NewX_AVM-DE_WPSStatus": "active"},
+		"wlanconfig1#X_AVM-DE_GetWPSInfo":             {"NewX_AVM-DE_WPSMode": "pbc", "NewX_AVM-DE_WPSStatus": "success"},
+		"wlanconfig1#X_AVM-DE_SetWLANGlobalEnable":    {},
+		"wlanconfig3#SetSSID":                         {},
+		"wlanconfig3#SetChannel":                      {},
+		"wlanconfig3#GetChannelInfo":                  {"NewChannel": "6", "NewPossibleChannels": "1,2,3,4,5,6,7,8,9,10,11,12,13", "NewX_AVM-DE_AutoChannelEnabled": "0"},
+		"wlanconfig3#SetBeaconAdvertisement":          {},
+		"lanconfigsecurity#X_AVM-DE_GetUserList":      {"NewX_AVM-DE_UserList": `<List><Username last_user="0">admin</Username><Username last_user="1">fbctl</Username></List>`},
 	}
 }
 
@@ -329,6 +420,11 @@ var desc = `<?xml version="1.0"?>
 	svc("Hosts:1", "LanDeviceHosts-com:serviceId:Hosts1", "hosts") +
 	svc("LANConfigSecurity:1", "LANConfigSecurity-com:serviceId:LANConfigSecurity1", "lanconfigsecurity") +
 	svc("X_AVM-DE_HostFilter:1", "X_AVM-DE_HostFilter-com:serviceId:X_AVM-DE_HostFilter1", "x_hostfilter") +
+	svc("X_AVM-DE_Auth:1", "X_AVM-DE_Auth-com:serviceId:X_AVM-DE_Auth1", "x_auth") +
+	svc("X_AVM-DE_TAM:1", "X_AVM-DE_TAM-com:serviceId:X_AVM-DE_TAM1", "x_tam") +
+	svc("X_VoIP:1", "X_VoIP-com:serviceId:X_VoIP1", "x_voip") +
+	svc("X_AVM-DE_RemoteAccess:1", "X_AVM-DE_RemoteAccess-com:serviceId:X_AVM-DE_RemoteAccess1", "x_remote") +
+	svc("X_AVM-DE_MyFritz:1", "X_AVM-DE_MyFritz-com:serviceId:X_AVM-DE_MyFritz1", "x_myfritz") +
 	`</serviceList>
 <deviceList>
 <device>
@@ -337,6 +433,7 @@ var desc = `<?xml version="1.0"?>
 	svc("WLANConfiguration:1", "WLANConfiguration-com:serviceId:WLANConfiguration1", "wlanconfig1") +
 	svc("WLANConfiguration:2", "WLANConfiguration-com:serviceId:WLANConfiguration2", "wlanconfig2") +
 	svc("WLANConfiguration:3", "WLANConfiguration-com:serviceId:WLANConfiguration3", "wlanconfig3") +
+	svc("LANHostConfigManagement:1", "LANHostConfigManagement-com:serviceId:LANHostConfigManagement1", "lanhostcfg") +
 	`</serviceList>
 </device>
 <device>
@@ -412,3 +509,12 @@ const meshList = `{"schema_version":"5.5","nodes":[
 {"uid":"n-5","device_name":"visitor-phone","device_model":"","device_mac_address":"AA:BB:CC:00:00:03","is_meshed":false,"mesh_role":"unknown",
  "node_interfaces":[{"uid":"ni-7","name":"","type":"WLAN","mac_address":"AA:BB:CC:00:00:03","node_links":[]}]}
 ]}`
+
+// BackupData is what the fake serves as configuration export.
+const BackupData = "**** FRITZ!Box 7590 AX CONFIGURATION EXPORT\nPassword=$$$$ENCRYPTED\n**** END OF EXPORT\n"
+
+const tamMessages = `<?xml version="1.0" encoding="utf-8"?>
+<Root><Message><Index>0</Index><Tam>0</Tam><Called>030999</Called><Date>12.11.26 09:15</Date><Duration>0:01</Duration><Inbook>1</Inbook><Name>Alice</Name><New>1</New><Number>01701234567</Number><Path>/download.lua?path=/data/tam/rec/rec.0.000</Path></Message>
+<Message><Index>1</Index><Tam>0</Tam><Called>030999</Called><Date>13.11.26 18:40</Date><Duration>0:02</Duration><Inbook>0</Inbook><Name></Name><New>0</New><Number>0301112223</Number><Path>/download.lua?path=/data/tam/rec/rec.0.001</Path></Message></Root>`
+
+const templateList = `<templatelist version="1"><template identifier="tmp6F0093-39512EE15" id="60008" functionbitmask="320" applymask="256"><name>Guest WLAN on</name><devices></devices><applymask><guest_wlan/></applymask></template><template identifier="tmp6F0093-3951300C0" id="60009" functionbitmask="320" applymask="1"><name>Heating holiday</name><devices><device identifier="11960 0012345"/></devices></template></templatelist>`

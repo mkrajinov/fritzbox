@@ -19,7 +19,7 @@ func TestNormalizeServiceName(t *testing.T) {
 }
 
 func TestEnvelopeEscapesAndSorts(t *testing.T) {
-	b := string(buildEnvelope("urn:dslforum-org:service:WLANConfiguration:1", "SetSSID", Args{"NewSSID": `a<b&"c"`, "A": "1"}))
+	b := string(buildEnvelope("urn:dslforum-org:service:WLANConfiguration:1", "SetSSID", Args{"NewSSID": `a<b&"c"`, "A": "1"}, ""))
 	if !strings.Contains(b, "<NewSSID>a&lt;b&amp;&#34;c&#34;</NewSSID>") {
 		t.Errorf("not escaped: %s", b)
 	}
@@ -71,5 +71,16 @@ func TestPinnedTLS(t *testing.T) {
 	fp := Fingerprint([]byte("x"))
 	if err := PinnedTLSConfig(strings.ToUpper(fp)).VerifyPeerCertificate([][]byte{[]byte("x")}, nil); err != nil {
 		t.Errorf("matching fingerprint rejected: %v", err)
+	}
+}
+
+func TestEnvelopeToken(t *testing.T) {
+	b := string(buildEnvelope("urn:dslforum-org:service:DeviceConfig:1", "Reboot", nil, "2C0A2110-AB"))
+	want := `<s:Header><avm:token xmlns:avm="avm.de" s:mustUnderstand="1">2C0A2110-AB</avm:token></s:Header><s:Body>`
+	if !strings.Contains(b, want) {
+		t.Fatalf("no token header:\n%s", b)
+	}
+	if strings.Contains(string(buildEnvelope("x", "y", nil, "")), "Header") {
+		t.Fatal("header without token")
 	}
 }

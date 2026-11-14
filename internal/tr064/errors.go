@@ -59,11 +59,10 @@ func IsCode(err error, code int) bool {
 	return errors.As(err, &u) && u.Code == code
 }
 
-// SecondFactorHint explains the limitation. AVM's flow (X_AVM-DE_Auth: SetConfig start → token,
-// confirm by button or phone code, poll GetState, retry with the token in a SOAP header) is not
-// implemented yet, so retrying after pressing the button alone will fail again.
-const SecondFactorHint = "the box requires a second-factor confirmation for this action, which fb does not support yet; " +
-	"do it in the web UI, or turn off the extra confirmation under System > FRITZ!Box Users > Login to the Home Network"
+// SecondFactorHint explains a second-factor error that reached the user, i.e. confirmation was
+// not given in time, was refused, or is blocked after too many attempts.
+const SecondFactorHint = "the box requires a confirmation on the device (button or phone code) for this action; " +
+	"it was not confirmed in time, or confirmations are temporarily blocked"
 
 // NeedsSecondFactor reports whether the box wants a physical confirmation.
 func NeedsSecondFactor(err error) bool {

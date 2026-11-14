@@ -132,7 +132,7 @@ func TestSecondFactorError(t *testing.T) {
 	b, fb := connect(t, fakebox.User, fakebox.Password)
 	fb.Faults["deviceconfig#Reboot"] = tr064.CodeSecondFactorNeeded
 	err := b.Reboot(context.Background())
-	if !tr064.NeedsSecondFactor(err) || !strings.Contains(err.Error(), "second-factor confirmation") {
+	if !tr064.NeedsSecondFactor(err) || !strings.Contains(err.Error(), "confirmation on the device") {
 		t.Fatalf("want second-factor error, got %v", err)
 	}
 }
@@ -276,5 +276,47 @@ func TestStatusAllReportsUnreachable(t *testing.T) {
 	})
 	if len(res) != 2 || res[0].Router != "dead" || res[0].Error == "" || res[1].Error != "" || res[1].Status.Model == "" {
 		t.Fatalf("%+v", res)
+	}
+}
+
+func TestSecondFactorFlow(t *testing.T) {
+	b, fb := connect(t, fakebox.User, fakebox.Password)
+	fb.NeedsToken["deviceconfig#Reboot"] = true
+	fb.ConfirmAfter = 2
+	var prompts []fritz.SecondFactorPrompt
+	b.SetSecondFactorHandler(func(p fritz.SecondFactorPrompt) { prompts = append(prompts, p) })
+	if err := b.Reboot(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(prompts) != 1 || prompts[0].Instructions() != "press any button on the FRITZ!Box, or dial *1234 on a phone connected to the box" {
+		t.Fatalf("prompts: %+v", prompts)
+	}
+	calls := fb.CallsTo("deviceconfig", "Reboot")
+	if len(calls) != 2 || !strings.Contains(calls[1].Body, fakebox.AuthToken) {
+		t.Fatalf("reboot not retried with token: %+v", calls)
+	}
+}
+
+func TestSecondFactorAbort(t *testing.T) {
+	b, fb := connect(t, fakebox.User, fakebox.Password)
+	fb.NeedsToken["deviceconfig#Reboot"] = true // never confirmed
+	b.SetSecondFactorHandler(func(p fritz.SecondFactorPrompt) { go p.Abort() })
+	err := b.Reboot(context.Background())
+	if !errors.Is(err, fritz.ErrSecondFactorAborted) {
+		t.Fatalf("want abort, got %v", err)
+	}
+	if len(fb.CallsTo("x_auth", "SetConfig")) != 2 || fb.AuthState != "stopped" {
+		t.Fatalf("box not told to stop: state %s", fb.AuthState)
+	}
+}
+
+func TestSecondFactorWithoutHandler(t *testing.T) {
+	b, fb := connect(t, fakebox.User, fakebox.Password)
+	fb.NeedsToken["deviceconfig#Reboot"] = true
+	if err := b.Reboot(context.Background()); !tr064.NeedsSecondFactor(err) {
+		t.Fatalf("got %v", err)
+	}
+	if len(fb.CallsTo("x_auth", "SetConfig")) != 0 {
+		t.Fatal("auth started without a handler")
 	}
 }

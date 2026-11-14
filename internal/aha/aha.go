@@ -297,3 +297,40 @@ func DecodeTemp(v int) string {
 		return "–"
 	}
 }
+
+// Template is a smart home template (a saved set of settings applied in one go,
+// e.g. "Guest WLAN on" or "Heating: holiday").
+type Template struct {
+	ID      string `xml:"identifier,attr" json:"id"`
+	Num     string `xml:"id,attr" json:"num"`
+	Name    string `xml:"name" json:"name"`
+	Devices []struct {
+		AIN string `xml:"identifier,attr" json:"ain"`
+	} `xml:"devices>device" json:"devices"`
+}
+
+// ParseTemplates parses gettemplatelistinfos output.
+func ParseTemplates(data []byte) ([]Template, error) {
+	var l struct {
+		Templates []Template `xml:"template"`
+	}
+	if err := xml.Unmarshal(data, &l); err != nil {
+		return nil, err
+	}
+	return l.Templates, nil
+}
+
+// Templates lists smart home templates.
+func (c *Client) Templates(ctx context.Context) ([]Template, error) {
+	b, err := c.Command(ctx, "gettemplatelistinfos", "", nil)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTemplates(b)
+}
+
+// ApplyTemplate runs a template by its identifier.
+func (c *Client) ApplyTemplate(ctx context.Context, id string) error {
+	_, err := c.Command(ctx, "applytemplate", id, nil)
+	return err
+}

@@ -33,6 +33,9 @@ type Box struct {
 
 	ahaOnce sync.Once
 
+	sfMu           sync.Mutex
+	onSecondFactor func(SecondFactorPrompt)
+
 	connMu    sync.Mutex
 	connKnown bool
 	connSvc   string
@@ -121,10 +124,6 @@ func (b *Box) ahaClient() *aha.Client {
 		b.aha = aha.New(base, b.User, b.pw, &http.Client{Transport: tr, Timeout: 15 * time.Second})
 	})
 	return b.aha
-}
-
-func (b *Box) call(ctx context.Context, svc, action string, args tr064.Args) (tr064.Result, error) {
-	return b.TR.Call(ctx, svc, action, args)
 }
 
 func atoi(s string) int {

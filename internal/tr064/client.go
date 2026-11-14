@@ -50,6 +50,9 @@ type Client struct {
 
 	mu   sync.Mutex
 	desc *Description
+
+	tlsOnce sync.Once
+	tlsHTTP *http.Client // for https URLs the box hands out while the profile uses plain HTTP
 }
 
 // New creates a client. The connection is lazy: nothing is sent until the first call.
@@ -81,16 +84,20 @@ func New(o Options) (*Client, error) {
 		}
 		base.TLSClientConfig = PinnedTLSConfig(o.Fingerprint)
 	}
+	return &Client{
+		opts: o,
+		base: fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(o.Host, fmt.Sprint(port))),
+		http: httpClient(base, o),
+	}, nil
+}
+
+func httpClient(base *http.Transport, o Options) *http.Client {
 	var rt http.RoundTripper = base
 	if o.Password != "" {
 		// digest.Transport caches the challenge, so only the first call pays the extra 401 round trip.
 		rt = &digest.Transport{Username: o.User, Password: o.Password, Transport: base}
 	}
-	return &Client{
-		opts: o,
-		base: fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(o.Host, fmt.Sprint(port))),
-		http: &http.Client{Transport: rt, Timeout: o.Timeout},
-	}, nil
+	return &http.Client{Transport: rt, Timeout: o.Timeout}
 }
 
 // BaseURL returns scheme://host:port.
@@ -207,11 +214,17 @@ type Result map[string]string
 
 // Call invokes a TR-064 action.
 func (c *Client) Call(ctx context.Context, service, action string, args Args) (Result, error) {
+	return c.CallWithToken(ctx, service, action, args, "")
+}
+
+// CallWithToken invokes an action with an X_AVM-DE_Auth second-factor token in the SOAP header
+// (no header when token is empty).
+func (c *Client) CallWithToken(ctx context.Context, service, action string, args Args, token string) (Result, error) {
 	s, err := c.Service(ctx, service)
 	if err != nil {
 		return nil, err
 	}
-	body := buildEnvelope(s.Type, action, args)
+	body := buildEnvelope(s.Type, action, args, token)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+s.ControlURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -258,22 +271,33 @@ func (e *StatusError) Error() string {
 // such as host, call or phonebook list URLs.
 func (c *Client) Get(ctx context.Context, pathOrURL string) ([]byte, error) {
 	u := pathOrURL
+	hc := c.http
 	if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
 		u = c.base + u
-	} else if c.opts.TLS {
-		// The box hands out absolute URLs; keep them on the pinned TLS endpoint.
-		if pu, err := url.Parse(u); err == nil && pu.Scheme == "http" {
+	} else if pu, err := url.Parse(u); err == nil {
+		// The box names itself (e.g. fritz.box) in absolute URLs, which may not resolve here
+		// (VPN DNS); always talk to the configured host.
+		if pu.Port() != "" {
+			pu.Host = net.JoinHostPort(c.opts.Host, pu.Port())
+		} else {
+			pu.Host = c.opts.Host
+		}
+		switch {
+		case c.opts.TLS && pu.Scheme == "http":
+			// Keep absolute URLs on the pinned TLS endpoint.
 			pu.Scheme = "https"
 			pu.Host = strings.TrimPrefix(c.base, "https://")
-			u = pu.String()
+		case !c.opts.TLS && pu.Scheme == "https":
+			hc = c.tlsClient()
 		}
+		u = pu.String()
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
 	}
 	c.debugf("→ GET %s\n", redactURL(u))
-	resp, err := c.http.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -292,13 +316,29 @@ func (c *Client) Get(ctx context.Context, pathOrURL string) ([]byte, error) {
 	return data, nil
 }
 
+// tlsClient serves https URLs (e.g. the config backup download) for profiles that talk plain
+// HTTP. The box's certificate is self-signed and no fingerprint is pinned, so it is not verified:
+// that is no weaker than the unencrypted HTTP the profile already uses. Pin with `fb router trust`
+// and tls: true for verified transport.
+func (c *Client) tlsClient() *http.Client {
+	c.tlsOnce.Do(func() {
+		t := &http.Transport{
+			Proxy:           nil,
+			DialContext:     (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // see doc comment
+		}
+		c.tlsHTTP = httpClient(t, c.opts)
+	})
+	return c.tlsHTTP
+}
+
 func (c *Client) debugf(format string, a ...any) {
 	if c.opts.Debug != nil {
 		fmt.Fprintf(c.opts.Debug, format, a...)
 	}
 }
 
-func buildEnvelope(serviceType, action string, args Args) []byte {
+func buildEnvelope(serviceType, action string, args Args, token string) []byte {
 	keys := make([]string, 0, len(args))
 	for k := range args {
 		keys = append(keys, k)
@@ -306,7 +346,11 @@ func buildEnvelope(serviceType, action string, args Args) []byte {
 	sort.Strings(keys)
 	var b bytes.Buffer
 	b.WriteString(`<?xml version="1.0" encoding="utf-8"?>`)
-	b.WriteString(`<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body>`)
+	b.WriteString(`<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">`)
+	if token != "" {
+		fmt.Fprintf(&b, `<s:Header><avm:token xmlns:avm="avm.de" s:mustUnderstand="1">%s</avm:token></s:Header>`, html.EscapeString(token))
+	}
+	b.WriteString(`<s:Body>`)
 	fmt.Fprintf(&b, `<u:%s xmlns:u="%s">`, action, html.EscapeString(serviceType))
 	for _, k := range keys {
 		fmt.Fprintf(&b, "<%s>%s</%s>", k, html.EscapeString(args[k]), k)

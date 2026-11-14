@@ -121,3 +121,75 @@ func TestRebootRefusesWithoutYesOnPipe(t *testing.T) {
 		t.Fatalf("reboot sent %d times", n)
 	}
 }
+
+func TestCLIAdminCommands(t *testing.T) {
+	fb, run := setupCLI(t)
+	t.Setenv("FB_BACKUP_PASSWORD", "secret")
+	out := filepath.Join(t.TempDir(), "box.export")
+	cases := []struct {
+		args []string
+		want []string
+	}{
+		{[]string{"update"}, []string{"154.08.02", "important"}},
+		{[]string{"update", "auto", "all"}, []string{"auto update: all"}},
+		{[]string{"backup", "-o", out}, []string{"saved", "box.export"}},
+		{[]string{"dhcp"}, []string{"192.168.178.20 – 192.168.178.200"}},
+		{[]string{"dhcp", "range", "192.168.178.100", "192.168.178.199", "-y"}, []string{"DHCP range"}},
+		{[]string{"remote"}, []string{"abc123.myfritz.net", "valid"}},
+		{[]string{"remote", "myfritz", "off"}, []string{"myfritz"}},
+		{[]string{"tam"}, []string{"0:1", "0301112223", "Alice"}},
+		{[]string{"tam", "mark", "0:0"}, nil},
+		{[]string{"forward"}, []string{"all calls → 01701234567 immediately"}},
+		{[]string{"forward", "on", "0"}, []string{"forwarding rule 0"}},
+		{[]string{"dial", "alice"}, []string{"calling Alice (01701234567)"}},
+		{[]string{"hangup"}, nil},
+		{[]string{"profiles"}, []string{"filtprof5", "Kids"}},
+		{[]string{"hosts", "info", "nas"}, []string{"35 of 120 min", "Standard"}},
+		{[]string{"hosts", "profile", "nas", "kids"}, []string{"nas now uses profile Kids"}},
+		{[]string{"hosts", "ticket", "nas"}, []string{"35 of 165 min"}},
+		{[]string{"hosts", "priority", "nas", "on"}, []string{"priority"}},
+		{[]string{"wlan", "set", "guest", "--ssid", "Visitors", "--channel", "11", "--hidden", "true", "-y"}, []string{"SSID: Visitors", "channel: 11", "hidden"}},
+		{[]string{"wlan", "wps", "2.4", "--wait=false"}, []string{"press WPS on the device"}},
+		{[]string{"wlan", "all", "on"}, []string{"all WLANs"}},
+		{[]string{"home", "templates"}, []string{"Guest WLAN on", "tmp6F0093-39512EE15"}},
+		{[]string{"home", "apply", "guest wlan on"}, []string{"applied Guest WLAN on"}},
+	}
+	for _, c := range cases {
+		got, err := run(c.args...)
+		if err != nil {
+			t.Errorf("%v: %v\n%s", c.args, err, got)
+			continue
+		}
+		for _, w := range c.want {
+			if !strings.Contains(got, w) {
+				t.Errorf("%v: missing %q in\n%s", c.args, w, got)
+			}
+		}
+	}
+	data, err := os.ReadFile(out)
+	if err != nil || string(data) != fakebox.BackupData {
+		t.Fatalf("backup file %q %v", data, err)
+	}
+	if st, _ := os.Stat(out); st.Mode().Perm() != 0o600 {
+		t.Errorf("backup mode %v", st.Mode().Perm())
+	}
+	if _, err := run("backup", "-o", out); err == nil {
+		t.Error("backup overwrote an existing file without --force")
+	}
+	if c := fb.CallsTo("x_voip", "X_AVM-DE_DialNumber"); len(c) != 1 || !strings.Contains(c[0].Body, "01701234567") {
+		t.Errorf("dial: %+v", c)
+	}
+}
+
+func TestCLISecondFactor(t *testing.T) {
+	fb, run := setupCLI(t)
+	fb.NeedsToken["deviceconfig#Reboot"] = true
+	fb.ConfirmAfter = 1
+	got, err := run("reboot", "-y")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, got)
+	}
+	if !strings.Contains(got, "press any button on the FRITZ!Box, or dial *1234") {
+		t.Fatalf("no instructions:\n%s", got)
+	}
+}

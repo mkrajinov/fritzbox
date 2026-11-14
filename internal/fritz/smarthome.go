@@ -49,3 +49,30 @@ func (b *Box) SetThermostat(ctx context.Context, ain, value string) error {
 func (b *Box) SetThermostatRaw(ctx context.Context, ain string, v int) error {
 	return b.ahaClient().SetTarget(ctx, ain, v)
 }
+
+// Templates lists smart home templates.
+func (b *Box) Templates(ctx context.Context) ([]aha.Template, error) {
+	return b.ahaClient().Templates(ctx)
+}
+
+// ApplyTemplate runs a smart home template.
+func (b *Box) ApplyTemplate(ctx context.Context, id string) error {
+	return b.ahaClient().ApplyTemplate(ctx, id)
+}
+
+// ResolveTemplate matches a template identifier or name (case-insensitive).
+func ResolveTemplate(ts []aha.Template, q string) (aha.Template, error) {
+	var m []aha.Template
+	for _, t := range ts {
+		if t.ID == q || t.Num == q || strings.EqualFold(t.Name, q) {
+			m = append(m, t)
+		}
+	}
+	switch len(m) {
+	case 0:
+		return aha.Template{}, fmt.Errorf("no template matches %q", q)
+	case 1:
+		return m[0], nil
+	}
+	return aha.Template{}, fmt.Errorf("%q matches %d templates; use the id", q, len(m))
+}

@@ -173,7 +173,7 @@ func (b *Box) Phonebooks(ctx context.Context) ([]Phonebook, error) {
 }
 
 func (b *Box) phonebook(ctx context.Context, id int) (Phonebook, error) {
-	r, err := b.call(ctx, onTel, "GetPhonebook", tr064.Args{"NewPhonebookId": strconv.Itoa(id)})
+	r, err := b.call(ctx, onTel, "GetPhonebook", tr064.Args{"NewPhonebookID": strconv.Itoa(id)})
 	if err != nil {
 		return Phonebook{}, err
 	}

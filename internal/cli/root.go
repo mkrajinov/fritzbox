@@ -56,7 +56,11 @@ func (a *app) boxFor(ctx context.Context, name string, r *config.Router) (*fritz
 	if a.verbose {
 		dbg = a.err
 	}
-	return fritz.Connect(ctx, name, r, pw, fritz.ConnectOptions{Timeout: a.timeout, Debug: dbg})
+	b, err := fritz.Connect(ctx, name, r, pw, fritz.ConnectOptions{Timeout: a.timeout, Debug: dbg})
+	if err == nil {
+		b.SetSecondFactorHandler(a.secondFactorPrompt)
+	}
+	return b, err
 }
 
 func (a *app) printJSON(v any) error {
@@ -100,8 +104,9 @@ func newRoot(out, errOut io.Writer) *cobra.Command {
 	root.AddCommand(
 		routerCmd(a), statusCmd(a), hostsCmd(a), reconnectCmd(a), rebootCmd(a),
 		wlanCmd(a), callsCmd(a), phonebookCmd(a), homeCmd(a), rawCmd(a), tuiCmd(a),
-		meshCmd(a), logCmd(a), exporterCmd(a),
+		meshCmd(a), logCmd(a), exporterCmd(a), watchCmd(a),
 	)
+	adminCmds(a, root)
 	return root
 }
 
