@@ -143,7 +143,7 @@ func TestWLANToggleNeedsConfirmForMainNetwork(t *testing.T) {
 
 func TestSmartHomeControls(t *testing.T) {
 	m, fb := setup(t)
-	m = press(t, m, "7")
+	m = press(t, m, "8")
 	v := plain(m.View())
 	if !strings.Contains(v, "Desk lamp") || !strings.Contains(v, "12.5 W") || !strings.Contains(v, "21.0°C") {
 		t.Fatalf("home view:\n%s", v)
@@ -229,7 +229,7 @@ func TestMeshAndLogTabs(t *testing.T) {
 			t.Errorf("mesh missing %q\n%s", want, v)
 		}
 	}
-	m = press(t, m, "8")
+	m = press(t, m, "9")
 	v = plain(m.View())
 	if !strings.Contains(v, "Event log · all · 2 events") || !strings.Contains(v, "Internet connection established") {
 		t.Fatalf("log:\n%s", v)
@@ -329,7 +329,7 @@ func TestCallsFilterContactsAndLogGroup(t *testing.T) {
 	if v := plain(m.View()); strings.Contains(v, "Alice") || !strings.Contains(v, "Bob") {
 		t.Fatalf("contacts search:\n%s", v)
 	}
-	m = press(t, m, "8", "g")
+	m = press(t, m, "9", "g")
 	if v := plain(m.View()); !strings.Contains(v, "Event log · sys") {
 		t.Fatalf("log group:\n%s", v)
 	}
@@ -342,5 +342,118 @@ func TestAllRouters(t *testing.T) {
 	v := plain(m.View())
 	if !strings.Contains(v, "All routers") || strings.Count(v, "FRITZ!Box 7590 AX") < 2 || !strings.Contains(v, "office") {
 		t.Fatalf("all routers:\n%s", v)
+	}
+}
+
+func TestSecondFactorModal(t *testing.T) {
+	m, fb := setup(t)
+	fb.NeedsToken["deviceconfig#Reboot"] = true
+	fb.ConfirmAfter = 3
+	mm := m.(Model)
+	// Run the reboot action; the prompt arrives on sfCh while the action waits for confirmation.
+	run := mm.action("reboot triggered", tabOverview, func(c context.Context, b Backend) error { return b.Reboot(c) })
+	done := make(chan tea.Msg, 1)
+	go func() { done <- run() }()
+	p := <-mm.sfCh
+	next, _ := m.Update(sfMsg{p})
+	if v := plain(next.View()); !strings.Contains(v, "Confirm on the box") || !strings.Contains(v, "dial *1234") {
+		t.Fatalf("no 2FA modal:\n%s", v)
+	}
+	res := <-done
+	next, _ = next.Update(res)
+	if next.(Model).sf != nil || !strings.Contains(plain(next.View()), "reboot triggered") {
+		t.Fatalf("modal not closed:\n%s", plain(next.View()))
+	}
+	if c := fb.CallsTo("deviceconfig", "Reboot"); len(c) != 2 {
+		t.Fatalf("reboot calls %d", len(c))
+	}
+}
+
+func TestPhoneAndSystemTabs(t *testing.T) {
+	m, fb := setup(t)
+	m = press(t, m, "7")
+	v := plain(m.View())
+	for _, want := range []string{"Answering machine", "0301112223", "Alice", "all calls → 01701234567 immediately", "2 messages · 1 new"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("phone missing %q\n%s", want, v)
+		}
+	}
+	m = press(t, m, "j", "j", "space") // rows: tam, msg(0301112223), msg(Alice) → mark Alice heard
+	if c := fb.CallsTo("x_tam", "MarkMessage"); len(c) != 1 || !strings.Contains(c[0].Body, "<NewMessageIndex>0<") || !strings.Contains(c[0].Body, "<NewMarkedAsRead>1<") {
+		t.Fatalf("mark: %+v", c)
+	}
+	m = press(t, m, "j", "space")
+	if len(fb.CallsTo("x_contact", "SetDeflectionEnable")) != 1 {
+		t.Fatal("forwarding not toggled")
+	}
+	m = press(t, m, "k", "c")
+	if !strings.Contains(plain(m.View()), "Call Alice?") {
+		t.Fatalf("no dial confirm:\n%s", plain(m.View()))
+	}
+	m = press(t, m, "y")
+	if c := fb.CallsTo("x_voip", "X_AVM-DE_DialNumber"); len(c) != 1 || !strings.Contains(c[0].Body, "01701234567") {
+		t.Fatalf("dial %+v", c)
+	}
+
+	m = press(t, m, "0")
+	v = plain(m.View())
+	for _, want := range []string{"Firmware", "auto update: important", "192.168.178.20 – 192.168.178.200", "abc123.myfritz.net", "Backup"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("system missing %q\n%s", want, v)
+		}
+	}
+	m = press(t, m, "a")
+	if c := fb.CallsTo("userif", "X_AVM-DE_SetConfig"); len(c) != 1 || !strings.Contains(c[0].Body, ">all<") {
+		t.Fatalf("auto mode %+v", c)
+	}
+	m = press(t, m, "H")
+	if !strings.Contains(plain(m.View()), "reachable from the internet") {
+		t.Fatalf("https enable not confirmed:\n%s", plain(m.View()))
+	}
+	m = press(t, m, "n")
+	if len(fb.CallsTo("x_remote", "SetEnable")) != 0 {
+		t.Fatal("https enabled without confirmation")
+	}
+	m = press(t, m, "e", "ctrl+u")
+	m = press(t, m, strings.Split("192.168.178.100 192.168.178.150", "")...)
+	m = press(t, m, "enter", "y")
+	if c := fb.CallsTo("lanhostcfg", "SetAddressRange"); len(c) != 1 || !strings.Contains(c[0].Body, "192.168.178.150") {
+		t.Fatalf("dhcp %+v", c)
+	}
+}
+
+func TestHostAdminKeysAndTemplates(t *testing.T) {
+	m, fb := setup(t)
+	m = press(t, m, "2", "enter") // nas, details load host info
+	v := plain(m.View())
+	if !strings.Contains(v, "Standard") || !strings.Contains(v, "35 of 120 min") {
+		t.Fatalf("host info:\n%s", v)
+	}
+	m = press(t, m, "f")
+	if !strings.Contains(plain(m.View()), "from profile Standard to Gast") {
+		t.Fatalf("profile confirm:\n%s", plain(m.View()))
+	}
+	m = press(t, m, "y", "t", "p")
+	if len(fb.CallsTo("x_hostfilter", "AddHostEntryToFilterProfile")) != 1 || len(fb.CallsTo("x_hostfilter", "AddTicketTimeToHostEntryByIP")) != 1 {
+		t.Fatal("profile/ticket not sent")
+	}
+	if c := fb.CallsTo("hosts", "X_AVM-DE_SetPrioritizationByIP"); len(c) != 1 || !strings.Contains(c[0].Body, ">1<") {
+		t.Fatalf("priority %+v", c)
+	}
+	m = press(t, m, "4", "j", "j", "e", "ctrl+u", "V", "i", "p", "enter", "y")
+	if c := fb.CallsTo("wlanconfig3", "SetSSID"); len(c) != 1 || !strings.Contains(c[0].Body, ">Vip<") {
+		t.Fatalf("ssid %+v", c)
+	}
+	m = press(t, m, "n")
+	if !strings.Contains(plain(m.View()), "possible: 1 2 3") {
+		t.Fatalf("channel input:\n%s", plain(m.View()))
+	}
+	m = press(t, m, "ctrl+u", "1", "1", "enter")
+	if len(fb.CallsTo("wlanconfig3", "SetChannel")) != 1 {
+		t.Fatal("channel not set")
+	}
+	m = press(t, m, "8", "j", "j", "space", "y")
+	if c := fb.CallsTo("aha", "applytemplate"); len(c) != 1 || !strings.Contains(c[0].Body, "tmp6F0093-39512EE15") {
+		t.Fatalf("template %+v", c)
 	}
 }

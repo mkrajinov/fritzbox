@@ -8,7 +8,8 @@ import (
 	"github.com/mkrajinovic/fbctl/internal/ui"
 )
 
-func hostDetail(h fritz.Host, access string, w int) string {
+func (m Model) hostDetail(h fritz.Host, w int) string {
+	access := m.access[h.IP]
 	state := ui.Muted.Render(ui.GlyphOff + " inactive")
 	if h.Active {
 		state = ui.OK.Render(ui.GlyphOn + " active")
@@ -30,6 +31,13 @@ func hostDetail(h fritz.Host, access string, w int) string {
 		row("id", h.MAC, "MAC address"),
 		row("⇄", orDash(link), "connection"),
 		row("⇅", accessText(access), "internet access"),
+	}
+	if hi, ok := m.hostInfo[h.IP]; ok {
+		rows = append(rows,
+			row("⧗", m.profileName(hi.ProfileID), onlineTimeText(hi)),
+			row("↑", onOffText(hi.Priority), "priority"),
+			row("⏻", onOffText(hi.AutoWOL), "auto wake from the internet"),
+		)
 	}
 	return ui.Card("Details", strings.Join(rows, "\n"), w)
 }

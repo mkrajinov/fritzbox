@@ -41,6 +41,8 @@ const (
 	GlyphCalls    = "☏"
 	GlyphHome     = "⌁"
 	GlyphContacts = "▤"
+	GlyphPhone    = "✆"
+	GlyphSystem   = "⚙"
 	GlyphUp       = "↑"
 	GlyphDown     = "↓"
 	GlyphOn       = "●"

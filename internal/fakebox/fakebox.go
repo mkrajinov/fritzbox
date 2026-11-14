@@ -164,6 +164,12 @@ func (b *Box) soap(w http.ResponseWriter, r *http.Request) {
 				acc, dis = "denied", "1"
 			}
 			b.Responses[key] = map[string]string{"NewWANAccess": acc, "NewDisallow": dis}
+		case "GetHostEntryByIP":
+			acc := "granted"
+			if b.Blocked[ip] {
+				acc = "denied"
+			}
+			b.Responses[key]["NewWANAccess"] = acc
 		}
 	}
 	if svc == "x_auth" {

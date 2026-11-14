@@ -53,6 +53,23 @@ fb calls [--missed|--in|--out] [--days N]
 fb calls monitor                               live RING/CALL/CONNECT/DISCONNECT events
 fb phonebook list | show <id> [--search x]
 fb home list | switch <ain|name> on|off|toggle | temp <ain|name> <°C|off|on>
+fb hosts info <host>                           model, profile, online time, priority, auto wake
+fb hosts priority|autowake <host> on|off
+fb hosts profile <host> [profile] | ticket <host>   parental control: access profile, extra time
+fb profiles                                    list access profiles
+fb wlan wps <wlan> [--stop]                    push-button WPS, waits until a device joins
+fb wlan all on|off                             all radios, like the WLAN button
+fb wlan set <wlan> [--ssid X] [--channel N|auto] [--hidden true|false]
+fb tam [machines | mark <t:i> | delete <t:i> | switch <t> on|off]   answering machine
+fb forward [on|off <id>]                       call forwarding rules (created in the web UI)
+fb dial <number|contact> [--phone NAME] | fb hangup   dialing help: rings your phone, then calls
+fb home templates | apply <template>           smart home templates (e.g. guest WLAN on)
+fb update [check | install | auto notify|important|all]   firmware
+fb backup [-o file]                            encrypted config export ($FB_BACKUP_PASSWORD or prompt)
+fb dhcp [range <first> <last>]                 DHCP server and address range
+fb remote [https|letsencrypt|myfritz on|off]   internet access to the box, DynDNS status
+fb watch [--interval 30s] [--no-notify]        desktop notifications: new device, internet down/up,
+                                               missed and incoming calls
 fb raw services | actions <svc> | call <svc> <action> Name=value...
 fb exporter [--listen 127.0.0.1:9133]          Prometheus metrics for all profiles on /metrics
 fb tui                                         also the default with no args in a terminal
@@ -63,21 +80,26 @@ passwords, WLAN keys and session IDs redacted). Exit code 3 means wrong credenti
 
 ## TUI
 
-Tabs: Overview · Hosts · Mesh · WLAN · Calls · Contacts · Smart Home · Log (`tab`/`1–8`). `[` `]` switch
-routers, `j`/`k` move, `r` refresh, `?` help.
+Tabs: Overview · Hosts · Mesh · WLAN · Calls · Contacts · Phone · Smart Home · Log · System
+(`tab`, `1–9`, `0`). `[` `]` switch routers (the other routers' pills show ● online / ○ unreachable),
+`j`/`k` move, `r` refresh, `?` help.
 
-- Overview: `A` status of all routers (like `fb status --all`), `R` reconnect, `B` reboot (both confirm).
-- Hosts: `/` filter, `a` active only, `s` cycle sort (ip → name → active), `enter` details including
-  internet access, `n` rename, `w` wake, `b`/`u` block/unblock internet (blocking confirms).
-- WLAN: `space` toggle (disabling a main network confirms), `c` QR code, `p` show password, `P` change
-  password (pre-filled with a generated one you can edit, confirms, then shows the new join QR code).
-- Calls: `f` cycle all/missed/in/out, `d` cycle 30/90/all/7 days. Live call monitor pane on top.
-- Contacts: `/` search name or number, `p` next phonebook.
-- Smart Home: `space` switch (thermostat: off ↔ 20 °C), `+`/`-` thermostat in 0.5 °C steps.
+- Overview: `A` status of all routers, `R` reconnect, `B` reboot (both confirm).
+- Hosts: `/` filter, `a` active only, `s` cycle sort, `enter` details (internet access, access profile,
+  online time, priority, auto wake), `n` rename, `w` wake, `b`/`u` block/unblock internet, `p` priority,
+  `o` auto wake, `f` next access profile (confirms), `t` online-time ticket.
+- WLAN: `space` toggle, `c` QR code, `p`/`P` show/change password, `e` SSID, `n` channel, `H` hide SSID,
+  `W` WPS, `O` all WLANs off/on. Changes that drop devices confirm first.
+- Calls: `f` all/missed/in/out, `d` 30/90/all/7 days, `c` call back, `x` hang up. Live monitor on top.
+- Contacts: `/` search, `p` next phonebook, `d` dial, `x` hang up.
+- Phone: answering machines, messages and forwarding rules in one list. `space` switches a machine or
+  rule, or marks a message heard/new; `x` deletes a message (confirms); `c` calls back.
+- Smart Home: `space` switch (thermostat: off ↔ 20 °C) or run a template, `+`/`-` thermostat.
 - Log: `g` cycle all/sys/net/fon/wlan/usb.
+- System: firmware `u` check, `I` install, `a` auto mode; `e` DHCP range; `H`/`L`/`M` remote HTTPS,
+  Let's Encrypt, MyFRITZ; `b` encrypted backup to the current directory.
 
-CLI only, on purpose: `router add/remove/use/trust/test` (password prompt and keychain), `raw`, `exporter`
-and `completion`.
+CLI only, on purpose: `router …` (password prompt and keychain), `raw`, `exporter`, `watch`, `completion`.
 
 Live rates are polled every 3 s with at most one request in flight per router; full status every 30 s.
 
@@ -99,21 +121,22 @@ scrape_configs:
 
 ## Second factor
 
-Newer FRITZ!OS versions can require a second-factor confirmation for some write actions
-(reboot, WLAN changes and similar). AVM's flow ([X_AVM-DE_Auth](https://fritz.com/fileadmin/user_upload/Global/Service/Schnittstellen/x_auth.pdf)):
-`SetConfig(NewAction=start)` returns a token and the allowed methods (button, phone code), the client
-polls `GetState` until `authenticated`, then repeats the call with the token in a SOAP header.
-**fb does not implement this yet.** It reports the error clearly; do the action in the web UI, or
-turn off the extra confirmation for the fb user. `router test` tells you if the protection is on.
+If the box asks for a confirmation (UPnP error 866), fb starts AVM's `X_AVM-DE_Auth` flow and tells you
+how to confirm: press a button on the box, or dial the shown code on a connected phone. It waits up to
+two minutes, then repeats the action with the token. In the CLI ctrl+c cancels; in the TUI a modal shows
+the instructions and esc cancels. Nothing to configure.
+
+## Grafana
+
+[docs/grafana-dashboard.json](docs/grafana-dashboard.json) is a dashboard for `fb exporter` (import it
+and pick your Prometheus data source).
 
 ## Roadmap
 
 See [docs/capabilities.md](docs/capabilities.md) for everything the box exposes and what fb covers.
 
-- **Second-factor confirmation (queued):** flow and SOAP header verified in AVM's Authentication PDF;
-  see docs/capabilities.md. Needed for writes on boxes with 2FA on.
-- Parental-control profiles and tickets, answering machine, firmware update, config backup.
-- Not possible through documented APIs: per-host static IP (DHCP reservation), WireGuard.
+- Not possible through documented APIs: per-host static IP (DHCP reservation), WireGuard, port
+  forwards for other hosts. They would need the undocumented web UI requests.
 - Replace hand-written fixtures with captures from a real box.
 
 ## Development
@@ -137,6 +160,13 @@ check on live hardware (capture with `fb -v raw call …`, scrub secrets, add to
 - unit of `X_AVM-DE_GetOnlineMonitor` `Newus/ds_current_bps` (treated as bytes/s)
 - `NewX_AVM-DE_FrequencyBand` in `WLANConfiguration.GetInfo` (falls back to the channel number)
 - `X_AVM_DE_GetExternalIPv6Address` on the TR-064 connection service (best effort, hidden if missing)
-- `X_AVM-DE_Auth1.GetInfo` `NewEnabled` (error codes 866–868 and the token header are verified in AVM's PDF)
+- the second-factor flow end to end (codes, states, `NewMethods` format and the token header follow AVM's
+  Authentication PDF; the box's action list was checked against its SCPD)
+- the format of `GetFilterProfiles` (parsed loosely: XML items with ID/Name, or `id:name` pairs)
+- `SetChannel` with 0 for automatic channel selection
+- the absolute URL `X_AVM-DE_GetConfigFile` returns (fb rewrites the host to the configured address)
+
+Action and argument names for all new features were checked against the SCPD files of a FRITZ!Box
+5590 Fiber (FRITZ!OS 8.25).
 - `LANConfigSecurity1.X_AVM-DE_GetUserList` without credentials (fritzconnection sends credentials; fb tries
   without first, then falls back to the legacy `dslf-config` user)

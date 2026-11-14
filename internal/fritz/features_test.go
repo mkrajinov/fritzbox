@@ -122,10 +122,10 @@ func TestHostInfoAndParental(t *testing.T) {
 
 func TestParseFilterProfilesVariants(t *testing.T) {
 	for in, want := range map[string]int{
-		`<List><Item><ID>filtprof1</ID><Name>Standard</Name></Item></List>`: 1,
+		`<List><Item><ID>filtprof1</ID><Name>Standard</Name></Item></List>`:                                               1,
 		`<FilterProfiles><Profile id="filtprof1" name="Standard"/><Profile id="filtprof2" name="Kids"/></FilterProfiles>`: 2,
 		"filtprof1:Standard,filtprof2:Kids": 2,
-		"": 0,
+		"":                                  0,
 	} {
 		ps, err := fritz.ParseFilterProfiles(in)
 		if err != nil || len(ps) != want || (want > 0 && ps[0].ID != "filtprof1") {

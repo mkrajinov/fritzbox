@@ -26,15 +26,17 @@ const (
 	tabWLAN
 	tabCalls
 	tabContacts
+	tabPhone
 	tabHome
 	tabLog
+	tabSystem
 	tabCount
 )
 
 func (t tab) title() string {
 	return [...]string{
 		ui.GlyphStatus + " Overview", ui.GlyphHosts + " Hosts", ui.GlyphMesh + " Mesh", ui.GlyphWLAN + " WLAN",
-		ui.GlyphCalls + " Calls", ui.GlyphContacts + " Contacts", ui.GlyphHome + " Smart Home", ui.GlyphLog + " Log",
+		ui.GlyphCalls + " Calls", ui.GlyphContacts + " Contacts", ui.GlyphPhone + " Phone", ui.GlyphHome + " Smart Home", ui.GlyphLog + " Log", ui.GlyphSystem + " System",
 	}[t]
 }
 
@@ -85,6 +87,19 @@ type Model struct {
 	hostSort   string // ip, name, active
 	detail     bool   // hosts: show details of the selected host
 	access     map[string]string
+	hostInfo   map[string]fritz.HostInfo
+	profiles   []fritz.FilterProfile
+
+	tams      []fritz.TAM
+	msgs      []fritz.Message
+	defl      []fritz.Deflection
+	phoneErr  error
+	phoneLoad bool
+	templates []aha.Template
+	sys       *sysState
+	sfCh      chan fritz.SecondFactorPrompt
+	sf        *fritz.SecondFactorPrompt
+	routerUp  map[string]bool
 
 	callFilter int // index into callFilters
 	callDays   int // index into callDays
@@ -122,7 +137,7 @@ func New(o Options) Model {
 	ti.Prompt = "/ "
 	ti.Placeholder = "filter"
 	idx := max(slices.Index(o.Routers, o.Current), 0)
-	return Model{opt: o, router: idx, filter: ti, hostSort: "ip"}
+	return Model{opt: o, router: idx, filter: ti, hostSort: "ip", sfCh: make(chan fritz.SecondFactorPrompt, 1)}
 }
 
 // Messages. Every async result carries the generation it was issued for.
@@ -202,7 +217,11 @@ func ctx() (context.Context, context.CancelFunc) {
 
 // Init connects to the initial router.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, m.connect())
+	cmds := []tea.Cmd{textinput.Blink, m.connect(), waitSecondFactor(m.sfCh)}
+	if len(m.opt.Routers) > 1 {
+		cmds = append(cmds, m.fetchAllStatus(true), tickRouters(m.gen))
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m Model) routerName() string {
@@ -233,6 +252,7 @@ func (m *Model) switchRouter(delta int) tea.Cmd {
 	m.upHist, m.downHist = nil, nil
 	m.hosts, m.wlans, m.calls, m.devs, m.events = nil, nil, nil, nil, nil
 	m.mesh, m.logEvs, m.detail, m.access = nil, nil, false, nil
+	m.resetAdmin()
 	m.books, m.book, m.contacts, m.input = nil, 0, nil, nil
 	m.rateBusy, m.statusBusy = false, false
 	m.cursor = [tabCount]int{}
@@ -301,6 +321,10 @@ func (m Model) fetchTab(t tab) tea.Cmd {
 		}
 	case tabContacts:
 		return m.fetchContacts(m.book)
+	case tabPhone:
+		return m.fetchPhone()
+	case tabSystem:
+		return m.fetchSystem()
 	case tabCalls:
 		days := callDays[m.callDays]
 		return func() tea.Msg {
@@ -310,12 +334,12 @@ func (m Model) fetchTab(t tab) tea.Cmd {
 			return callsMsg{gen, calls, err}
 		}
 	case tabHome:
-		return func() tea.Msg {
+		return tea.Batch(func() tea.Msg {
 			c, cancel := ctx()
 			defer cancel()
 			d, err := b.SmartDevices(c)
 			return devsMsg{gen, d, err}
-		}
+		}, m.fetchTemplates())
 	}
 	return nil
 }
@@ -393,6 +417,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.backend, m.host = msg.backend, msg.host
+		m.installSecondFactor()
 		m.statusBusy, m.rateBusy = true, true
 		cmds := []tea.Cmd{m.fetchStatus(), m.fetchRates(), tickRates(m.gen), tickStatus(m.gen), m.startMonitor()}
 		if m.tab != tabOverview {
@@ -506,6 +531,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.access = map[string]string{}
 			}
 			m.access[msg.ip] = msg.access
+			if msg.info != nil {
+				if m.hostInfo == nil {
+					m.hostInfo = map[string]fritz.HostInfo{}
+				}
+				m.hostInfo[msg.ip] = *msg.info
+			}
 			if msg.err != nil {
 				m.access[msg.ip] = "unknown (" + msg.err.Error() + ")"
 			}
@@ -515,6 +546,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.gen != m.gen {
 			return m, nil
 		}
+		m.sf = nil
 		if msg.err != nil {
 			m.setFlash(msg.err)
 			return m, nil
@@ -523,7 +555,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.qr = renderQR(msg.w, msg.pw) + "\n" + row("⚿", msg.pw, "new password")
 		return m, m.fetchTab(tabWLAN)
 	case allStatusMsg:
-		if msg.gen == m.gen {
+		if m.routerUp == nil {
+			m.routerUp = map[string]bool{}
+		}
+		for _, r := range msg.rows {
+			m.routerUp[r.name] = r.err == nil
+		}
+		if msg.gen == m.gen && !msg.background {
 			m.qr = renderAllStatus(msg.rows)
 		}
 		return m, nil
@@ -539,13 +577,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.gen != m.gen {
 			return m, nil
 		}
+		m.sf = nil
 		if msg.err != nil {
 			m.setFlash(msg.err)
 			return m, nil
 		}
 		m.flash, m.flashOK = msg.text, true
 		if msg.refresh == tabHosts {
-			m.access = nil // block/unblock changes it
+			m.access, m.hostInfo = nil, nil // block/unblock, priority, profile change it
 			return m, tea.Batch(m.fetchTab(tabHosts), m.detailAccess())
 		}
 		return m, m.fetchTab(msg.refresh)
@@ -586,6 +625,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitMonitor()
 	}
 
+	if mm, cmd, ok := m.adminUpdate(msg); ok {
+		return mm, cmd
+	}
 	if m.filtering {
 		var cmd tea.Cmd
 		m.filter, cmd = m.filter.Update(msg)
@@ -605,7 +647,7 @@ func (m *Model) setFlash(err error) {
 	}
 	m.flash, m.flashOK = err.Error(), false
 	if tr064.NeedsSecondFactor(err) {
-		m.flash = "Needs second-factor confirmation on the box (not supported yet): use the web UI or turn the extra confirmation off. " + err.Error()
+		m.flash = "Not confirmed on the box: " + err.Error()
 	}
 }
 
@@ -665,8 +707,10 @@ func (m Model) listLen(t tab) int {
 		return len(m.visibleCalls())
 	case tabContacts:
 		return len(m.visibleContacts())
+	case tabPhone:
+		return len(m.tams) + len(m.msgs) + len(m.defl)
 	case tabHome:
-		return len(m.devs)
+		return len(m.devs) + len(m.templates)
 	case tabMesh:
 		return m.meshRows()
 	case tabLog:
@@ -682,6 +726,14 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	// Modal states first.
+	if m.sf != nil {
+		if key == "esc" {
+			m.sf.Abort()
+			m.sf = nil
+			m.flash, m.flashOK = "confirmation cancelled", true
+		}
+		return m, nil
+	}
 	if m.confirm != nil {
 		switch key {
 		case "y", "Y", "enter":
@@ -730,8 +782,10 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.setTab((m.tab + 1) % tabCount)
 	case "shift+tab", "left", "h":
 		return m.setTab((m.tab + tabCount - 1) % tabCount)
-	case "1", "2", "3", "4", "5", "6", "7", "8":
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		return m.setTab(tab(key[0] - '1'))
+	case "0":
+		return m.setTab(tabSystem)
 	case "]":
 		return m, m.switchRouter(1)
 	case "[":
@@ -766,6 +820,9 @@ func (m Model) setTab(t tab) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) tabKey(key string) (tea.Model, tea.Cmd) {
+	if mm, cmd, ok := m.adminKey(key); ok {
+		return mm, cmd
+	}
 	cur := m.cursor[m.tab]
 	switch m.tab {
 	case tabOverview:
@@ -786,7 +843,7 @@ func (m Model) tabKey(key string) (tea.Model, tea.Cmd) {
 			}
 		case "A":
 			m.flash, m.flashOK = "polling all routers…", true
-			return m, m.fetchAllStatus()
+			return m, m.fetchAllStatus(false)
 		}
 	case tabHosts:
 		hosts := m.visibleHosts()
@@ -801,7 +858,7 @@ func (m Model) tabKey(key string) (tea.Model, tea.Cmd) {
 			m.hostSort = hostSorts[(slices.Index(hostSorts, m.hostSort)+1)%len(hostSorts)]
 		case "enter":
 			m.detail = !m.detail
-			return m, m.detailAccess()
+			return m, tea.Batch(m.detailAccess(), m.fetchProfiles())
 		case "n":
 			if cur < len(hosts) {
 				m.renameHost(hosts[cur])

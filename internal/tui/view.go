@@ -32,6 +32,8 @@ func (m Model) View() string {
 
 	body := m.body(w)
 	switch {
+	case m.sf != nil:
+		body = m.secondFactorView()
 	case m.input != nil:
 		body = m.inputView()
 	case m.confirm != nil:
@@ -51,6 +53,9 @@ func (m Model) header(w int) string {
 	var pills []string
 	for i, n := range m.opt.Routers {
 		label := ui.GlyphRouter + " " + n
+		if up, ok := m.routerUp[n]; ok && i != m.router {
+			label += " " + map[bool]string{true: ui.GlyphOn, false: ui.GlyphOff}[up]
+		}
 		if i == m.router {
 			pills = append(pills, ui.GradientPill(label))
 		} else {
@@ -121,21 +126,44 @@ func (m Model) footer() string {
 		add("n", "rename")
 		add("w", "wake")
 		add("b/u", "block/unblock")
+		add("p", "priority")
+		add("o", "auto wake")
+		add("f", "profile")
+		add("t", "ticket")
 	case tabWLAN:
 		add("space", "toggle")
 		add("c", "QR code")
-		add("p", "password")
-		add("P", "change password")
+		add("p/P", "show/change password")
+		add("e", "SSID")
+		add("n", "channel")
+		add("H", "hide")
+		add("W", "WPS")
+		add("O", "all off/on")
 	case tabCalls:
 		add("f", "filter")
 		add("d", "days")
+		add("c", "call back")
+		add("x", "hang up")
 	case tabContacts:
 		add("/", "search")
 		if len(m.books) > 1 {
 			add("p", "next phonebook")
 		}
+		add("d", "dial")
+		add("x", "hang up")
+	case tabPhone:
+		add("space", "toggle / mark heard")
+		add("x", "delete / hang up")
+		add("c", "call back")
+	case tabSystem:
+		add("u", "check update")
+		add("I", "install")
+		add("a", "auto mode")
+		add("e", "DHCP range")
+		add("H/L/M", "https/LE/MyFRITZ")
+		add("b", "backup")
 	case tabHome:
-		add("space", "switch / off")
+		add("space", "switch / off / run template")
 		add("+/-", "temp")
 	case tabLog:
 		add("g", "group")
@@ -172,6 +200,10 @@ func (m Model) body(w int) string {
 		return m.callsView(w)
 	case tabContacts:
 		return m.contactsView(w)
+	case tabPhone:
+		return m.phoneView(w)
+	case tabSystem:
+		return m.systemView(w)
 	case tabHome:
 		return m.homeView(w)
 	case tabMesh:
@@ -306,7 +338,7 @@ func (m Model) hostsView(w int) string {
 	out := ui.Card(title, strings.Join(lines, "\n"), w)
 	if m.detail && m.cursor[tabHosts] < len(hosts) {
 		h := hosts[m.cursor[tabHosts]]
-		out += "\n" + hostDetail(h, m.access[h.IP], w)
+		out += "\n" + m.hostDetail(h, w)
 	}
 	return out
 }
@@ -377,7 +409,7 @@ func (m Model) homeView(w int) string {
 	if m.devs == nil {
 		return ui.Card("Smart Home", ui.Muted.Render("loading…"), w)
 	}
-	if len(m.devs) == 0 {
+	if len(m.devs) == 0 && len(m.templates) == 0 {
 		return ui.Card("Smart Home", ui.Muted.Render("no smart home devices"), w)
 	}
 	var lines []string
@@ -407,6 +439,7 @@ func (m Model) homeView(w int) string {
 		line := ctrl + "  " + row(ui.GlyphHome, d.Name, strings.TrimSpace(d.Product+" · "+hint))
 		lines = append(lines, mark(i == m.cursor[tabHome], line, w))
 	}
+	lines = append(lines, m.templateLines(w)...)
 	return ui.Card("Smart Home", strings.Join(lines, "\n"), w)
 }
 
@@ -430,18 +463,24 @@ func helpText() string {
 	return strings.Join([]string{
 		ui.Bold.Render("Keys"),
 		"",
-		"tab / shift+tab, 1–8   switch tab",
+		"tab / shift+tab, 1–9 0 switch tab",
 		"[ / ]                  previous / next router",
 		"j k / ↑ ↓              move",
 		"r                      refresh",
 		"",
 		"Overview   A all routers · R reconnect · B reboot",
-		"Hosts      / filter · a active only · s sort · enter details · n rename · w wake-on-LAN · b/u block/unblock internet",
-		"WLAN       space toggle · c QR code · p show password · P change password",
-		"Calls      f all/missed/in/out · d 30/90/all/7 days",
-		"Contacts   / search · p next phonebook",
-		"Smart Home space switch (thermostat: off ↔ 20 °C) · + / - target temperature",
+		"Hosts      / filter · a active only · s sort · enter details · n rename · w wake-on-LAN",
+		"           b/u block/unblock internet · p priority · o auto wake · f next access profile · t online-time ticket",
+		"WLAN       space toggle · c QR code · p/P show/change password · e SSID · n channel · H hide SSID",
+		"           W WPS push button · O all WLANs off/on",
+		"Calls      f all/missed/in/out · d 30/90/all/7 days · c call back · x hang up",
+		"Contacts   / search · p next phonebook · d dial · x hang up",
+		"Phone      space answering machine on/off, mark message heard, forwarding on/off · x delete · c call back",
+		"Smart Home space switch (thermostat: off ↔ 20 °C) or run template · + / - target temperature",
 		"Log        g all/sys/net/fon/wlan/usb",
+		"System     u check firmware · I install · a auto update · e DHCP range · H/L/M remote HTTPS, Let's Encrypt, MyFRITZ · b backup",
+		"",
+		"Writes the box wants confirmed show how to confirm (button or phone code); esc cancels.",
 		"",
 		"q / ctrl+c quit",
 	}, "\n")

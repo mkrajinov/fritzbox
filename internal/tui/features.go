@@ -68,6 +68,7 @@ type (
 		gen    int
 		ip     string
 		access string
+		info   *fritz.HostInfo
 		err    error
 	}
 	pwChangedMsg struct {
@@ -77,8 +78,9 @@ type (
 		err error
 	}
 	allStatusMsg struct {
-		gen  int
-		rows []routerRow
+		gen        int
+		rows       []routerRow
+		background bool // header refresh, not the A modal
 	}
 )
 
@@ -170,8 +172,11 @@ func (m Model) fetchAccess(h fritz.Host) tea.Cmd {
 	return func() tea.Msg {
 		c, cancel := ctx()
 		defer cancel()
+		if hi, err := b.HostInfo(c, h.IP); err == nil {
+			return accessMsg{gen, h.IP, hi.WANAccess, &hi, nil}
+		}
 		acc, _, err := b.WANAccess(c, h.IP)
-		return accessMsg{gen, h.IP, acc, err}
+		return accessMsg{gen, h.IP, acc, nil, err}
 	}
 }
 
@@ -188,7 +193,7 @@ func (m Model) detailAccess() tea.Cmd {
 }
 
 // fetchAllStatus polls every router profile at once, like `fb status --all`.
-func (m Model) fetchAllStatus() tea.Cmd {
+func (m Model) fetchAllStatus(background bool) tea.Cmd {
 	names, conn, gen := slices.Clone(m.opt.Routers), m.opt.Connect, m.gen
 	return func() tea.Msg {
 		rows := make([]routerRow, len(names))
@@ -209,7 +214,7 @@ func (m Model) fetchAllStatus() tea.Cmd {
 			})
 		}
 		wg.Wait()
-		return allStatusMsg{gen, rows}
+		return allStatusMsg{gen, rows, background}
 	}
 }
 

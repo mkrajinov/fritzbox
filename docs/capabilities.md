@@ -3,7 +3,7 @@
 Research from November 2026, based on AVM's TR-064 PDFs (https://fritz.support/resources/TR-064_<Name>.pdf, index at
 https://fritz.com/en/pages/interfaces), fritzconnection 1.15.1 and Home Assistant's `fritz` integration.
 
-Legend: ✅ implemented in fb · 🔜 queued · ○ documented, not implemented · ✗ not available through a documented API (web UI only)
+Legend: ✅ implemented in fb · ○ documented, not implemented · ✗ not available through a documented API (web UI only)
 
 ## Hosts and network
 
@@ -13,9 +13,9 @@ Legend: ✅ implemented in fb · 🔜 queued · ○ documented, not implemented 
 | Rename host | ✅ `fb hosts rename` | `Hosts:1` `X_AVM-DE_SetHostNameByMACAddress` (NewMACAddress, NewHostName) |
 | Block or allow internet per host | ✅ `fb hosts block/unblock/access`, TUI `b`/`u` | `X_AVM-DE_HostFilter:1` `DisallowWANAccessByIP` (NewIPv4Address, NewDisallow), `GetWANAccessByIP` → NewWANAccess. Fails with 880 for FRITZ! and PLC devices. |
 | Mesh topology | ✅ `fb mesh`, TUI Mesh tab | `Hosts:1` `X_AVM-DE_GetMeshListPath` (JSON) |
-| Parental-control profiles, time tickets | ○ | `X_AVM-DE_HostFilter:1` `GetFilterProfiles`, `AddHostEntryToFilterProfile`, `GetHostEntryByIP`, `AddTicketTimeToHostEntryByIP`, `MarkTicket` |
-| Auto-WOL, priority, device class | ○ | `Hosts:1` `X_AVM-DE_SetAutoWakeOnLANByMACAddress`, `X_AVM-DE_SetPrioritizationByIP`, `X_AVM-DE_SetDeviceClassUserByMAC` |
-| DHCP range, DHCP server on/off | ○ | `LANHostConfigManagement:1` `GetInfo`, `SetAddressRange`, `SetDHCPServerEnable` |
+| Parental-control profiles, time tickets | ✅ `fb profiles`, `fb hosts profile/ticket`, TUI `f`/`t` | `X_AVM-DE_HostFilter:1` `GetFilterProfiles`, `AddHostEntryToFilterProfile`, `GetHostEntryByIP`, `AddTicketTimeToHostEntryByIP`, `MarkTicket` |
+| Auto-WOL, priority (device class: ○) | ✅ `fb hosts autowake/priority`, TUI `o`/`p` | `Hosts:1` `X_AVM-DE_SetAutoWakeOnLANByMACAddress`, `X_AVM-DE_SetPrioritizationByIP`, `X_AVM-DE_SetDeviceClassUserByMAC` |
+| DHCP range (server on/off: ○) | ✅ `fb dhcp`, TUI System `e` | `LANHostConfigManagement:1` `GetInfo`, `SetAddressRange`, `SetDHCPServerEnable` |
 | **Static IP / DHCP reservation per host** | ✗ | No TR-064 action. Web UI only, through undocumented `data.lua` / `query.lua` requests. Would need a browser devtools capture and could break with any firmware update. |
 | Static routes | ○ | `Layer3Forwarding:1` `AddForwardingEntry`, `DeleteForwardingEntry` |
 
@@ -33,9 +33,9 @@ Legend: ✅ implemented in fb · 🔜 queued · ○ documented, not implemented 
 |---|---|---|
 | **WireGuard** | ✗ | Not in any TR-064 document. Web UI only. |
 | IPsec per app | ○ | `X_AVM-DE_AppSetup:1` `RegisterApp`, `SetAppVPN` / `SetAppVPNwithPFS` |
-| Remote HTTPS, Let's Encrypt | ○ | `X_AVM-DE_RemoteAccess:1` `GetInfo`, `SetConfig`, `SetLetsEncryptEnable` |
-| DynDNS | ○ | `X_AVM-DE_RemoteAccess:1` `GetDDNSInfo`, `SetDDNSConfig` |
-| MyFRITZ | ○ | `X_AVM-DE_MyFritz:1` `GetInfo`, `SetMyFritz` |
+| Remote HTTPS, Let's Encrypt | ✅ `fb remote https/letsencrypt`, TUI System | `X_AVM-DE_RemoteAccess:1` `GetInfo`, `SetConfig`, `SetLetsEncryptEnable` |
+| DynDNS | status ✅, setting it ○ (needs the provider password) | `X_AVM-DE_RemoteAccess:1` `GetDDNSInfo`, `SetDDNSConfig` |
+| MyFRITZ | ✅ `fb remote myfritz` | `X_AVM-DE_MyFritz:1` `GetInfo`, `SetMyFritz` |
 
 ## WLAN
 
@@ -43,9 +43,9 @@ Legend: ✅ implemented in fb · 🔜 queued · ○ documented, not implemented 
 |---|---|---|
 | List, on/off, QR code | ✅ | `WLANConfiguration:N` `GetInfo`, `SetEnable`, `GetSecurityKeys` |
 | Change password | ✅ `fb wlan password` | `SetSecurityKeys` (NewKeyPassphrase, NewPreSharedKey, NewWEPKey0–3 = "") |
-| WPS push button | ○ | `X_AVM-DE_SetWPSConfig` (NewX_AVM-DE_WPSMode = pbc/stop) |
-| SSID, channel, hidden | ○ | `SetSSID`, `SetChannel`, `SetBeaconAdvertisement` |
-| All radios off (like the WLAN button) | ○ | `X_AVM-DE_SetWLANGlobalEnable` |
+| WPS push button | ✅ `fb wlan wps`, TUI `W` | `X_AVM-DE_SetWPSConfig` (NewX_AVM-DE_WPSMode = pbc/stop) |
+| SSID, channel, hidden | ✅ `fb wlan set`, TUI `e`/`n`/`H` | `SetSSID`, `SetChannel`, `SetBeaconAdvertisement` |
+| All radios off (like the WLAN button) | ✅ `fb wlan all`, TUI `O` | `X_AVM-DE_SetWLANGlobalEnable` |
 | Guest timeout, night mode | read only | `X_AVM-DE_GetWLANExtInfo`, `X_AVM-DE_GetNightControl`. Setting them is web UI only. |
 
 ## Telephony
@@ -53,9 +53,9 @@ Legend: ✅ implemented in fb · 🔜 queued · ○ documented, not implemented 
 | Capability | Status | Interface |
 |---|---|---|
 | Call list, phonebooks, call monitor | ✅ | `X_AVM-DE_OnTel:1`, TCP 1012 |
-| Answering machine: list, mark, delete | ○ | `X_AVM-DE_TAM:1` `GetMessageList`, `MarkMessage`, `DeleteMessage` |
-| Call deflection on/off | ○ | `X_AVM-DE_OnTel:1` `GetDeflections`, `SetDeflectionEnable` (no create action) |
-| Dial, hang up | ○ | `X_VoIP:1` `X_AVM-DE_DialNumber`, `X_AVM-DE_DialHangup` |
+| Answering machine: list, mark, delete, on/off | ✅ `fb tam`, TUI Phone tab (playback: ○) | `X_AVM-DE_TAM:1` `GetMessageList`, `MarkMessage`, `DeleteMessage` |
+| Call deflection on/off | ✅ `fb forward`, TUI Phone tab | `X_AVM-DE_OnTel:1` `GetDeflections`, `SetDeflectionEnable` (no create action) |
+| Dial, hang up | ✅ `fb dial/hangup`, TUI `c`/`d`/`x` | `X_VoIP:1` `X_AVM-DE_DialNumber`, `X_AVM-DE_DialHangup` |
 | DECT handsets | ○ | `X_AVM-DE_Dect:1` |
 
 ## System
@@ -63,14 +63,14 @@ Legend: ✅ implemented in fb · 🔜 queued · ○ documented, not implemented 
 | Capability | Status | Interface |
 |---|---|---|
 | Status, reboot, reconnect, event log | ✅ | `DeviceInfo:1`, `DeviceConfig:1`, `X_AVM-DE_GetDeviceLogPath` |
-| Firmware check and update | ○ | `UserInterface:1` `X_AVM-DE_CheckUpdate`, `X_AVM-DE_DoUpdate` |
-| Config backup | ○ | `DeviceConfig:1` `X_AVM-DE_GetConfigFile` (NewX_AVM-DE_Password) → URL valid for under 30 s |
+| Firmware check and update, auto mode | ✅ `fb update`, TUI System | `UserInterface:1` `X_AVM-DE_CheckUpdate`, `X_AVM-DE_DoUpdate` |
+| Config backup | ✅ `fb backup`, TUI System `b` (restore: web UI) | `DeviceConfig:1` `X_AVM-DE_GetConfigFile` (NewX_AVM-DE_Password) → URL valid for under 30 s |
 | NTP, UPnP, NAS/FTP/SMB, file links | ○ | `Time:1`, `X_AVM-DE_UPnP:1`, `X_AVM-DE_Storage:1`, `X_AVM-DE_Filelinks:1` |
 | Smart home switch and thermostat | ✅ | AHA `homeautoswitch.lua` |
-| Smart home templates and routines (e.g. guest WLAN template) | ○ | AHA `gettemplatelistinfos`, `applytemplate`, `settriggeractive` |
+| Smart home templates (e.g. guest WLAN template) | ✅ `fb home templates/apply`, TUI Smart Home | AHA `gettemplatelistinfos`, `applytemplate`, `settriggeractive` |
 | USB devices, LED or button lock, internet speed test | ✗ | `X_AVM-DE_Speedtest` only runs the box's local test server |
 
-## Second factor (🔜 queued)
+## Second factor (✅ implemented)
 
 Verified in AVM's `TR-064_Authentication.pdf`, version 5 (2025-08-07):
 
