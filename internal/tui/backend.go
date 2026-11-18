@@ -13,6 +13,7 @@ type Backend interface {
 	Status(ctx context.Context) (fritz.Status, error)
 	Rates(ctx context.Context) (fritz.Rates, error)
 	Hosts(ctx context.Context) ([]fritz.Host, error)
+	WLANAssociations(ctx context.Context) ([]fritz.WLANClient, error)
 	WakeOnLAN(ctx context.Context, mac string) error
 	WLANs(ctx context.Context) ([]fritz.WLAN, error)
 	SetWLAN(ctx context.Context, index int, enable bool) error

@@ -265,7 +265,7 @@ func (m Model) overview(w int) string {
 func (m Model) listWindow(n, cursor int) (int, int) {
 	rows := max(5, m.height-14)
 	if m.tab == tabHosts && m.detail {
-		rows = max(5, rows-8)
+		rows = max(5, rows-10)
 	}
 	if n <= rows {
 		return 0, n
@@ -324,11 +324,14 @@ func (m Model) hostsView(w int) string {
 	from, to := m.listWindow(len(hosts), m.cursor[tabHosts])
 	for i := from; i < to; i++ {
 		h := hosts[i]
-		iface := h.Interface
-		if h.Guest {
-			iface += " · guest"
+		iface := ui.Muted.Render(h.Interface)
+		if c, ok := m.wifi[strings.ToUpper(h.MAC)]; ok {
+			iface = ui.Signal(c.Signal) + ui.Muted.Render(" "+c.Band+" GHz")
 		}
-		line := fmt.Sprintf("%s %-28s %-16s %-18s %s", ui.OnOff(h.Active), trunc(orDash(h.Name), 28), h.IP, h.MAC, ui.Muted.Render(iface))
+		if h.Guest {
+			iface += ui.Muted.Render(" · guest")
+		}
+		line := fmt.Sprintf("%s %-28s %-16s %-18s %s", ui.OnOff(h.Active), trunc(orDash(h.Name), 28), h.IP, h.MAC, iface)
 		lines = append(lines, mark(i == m.cursor[tabHosts], line, w))
 	}
 	title := fmt.Sprintf("Hosts · %d active / %d known · sort %s", active, len(m.hosts), m.hostSort)

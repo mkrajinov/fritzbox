@@ -37,3 +37,10 @@ func (a *app) kv(pairs ...[2]string) {
 		fmt.Fprintf(a.out, "%s  %s\n", ui.Muted.Render(fmt.Sprintf("%-*s", w, p[0])), p[1])
 	}
 }
+
+func orDash(s string) string {
+	if s == "" {
+		return "–"
+	}
+	return s
+}

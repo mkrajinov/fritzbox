@@ -178,3 +178,65 @@ func Sparkline(vals []int64, width int, style lipgloss.Style) string {
 	}
 	return style.Render(b.String())
 }
+
+// Signal renders a 0–100 signal value as four bars plus the number, coloured by quality
+// (≥70 excellent, ≥50 good, ≥30 fair, else weak — the same thresholds as fritz.SignalLabel).
+func Signal(s int) string {
+	n := 1
+	switch {
+	case s >= 70:
+		n = 4
+	case s >= 50:
+		n = 3
+	case s >= 30:
+		n = 2
+	}
+	bars := strings.Repeat("▮", n) + strings.Repeat("▯", 4-n)
+	st := Bad
+	switch n {
+	case 4, 3:
+		st = OK
+	case 2:
+		st = Warn
+	}
+	return st.Render(bars) + fmt.Sprintf(" %3d", s)
+}
+
+// Ago formats a duration coarsely: "just now", "12m", "2h 05m", "3d 4h".
+func Ago(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh %02dm", int(d.Hours()), int(d.Minutes())%60)
+	}
+	return fmt.Sprintf("%dd %dh", int(d.Hours())/24, int(d.Hours())%24)
+}
+
+// When formats a time relative to now: "18:02" today, "Mon 18:02" within a week, else the date.
+func When(t, now time.Time) string {
+	t, now = t.Local(), now.Local()
+	switch {
+	case t.IsZero():
+		return "–"
+	case t.YearDay() == now.YearDay() && t.Year() == now.Year():
+		return t.Format("15:04")
+	case now.Sub(t) < 6*24*time.Hour:
+		return t.Format("Mon 15:04")
+	}
+	return t.Format("2006-01-02 15:04")
+}
+
+// Presence renders "● home since 18:02 (2h 05m)" or "○ away since Mon 08:10 (1d 3h)".
+func Presence(home bool, since, now time.Time) string {
+	state := Muted.Render(GlyphOff + " away")
+	if home {
+		state = OK.Render(GlyphOn + " home")
+	}
+	if since.IsZero() {
+		return state
+	}
+	return state + " since " + When(since, now) + Muted.Render(" ("+Ago(now.Sub(since))+")")
+}

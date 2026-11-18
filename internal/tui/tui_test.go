@@ -12,6 +12,7 @@ import (
 	"github.com/mkrajinovic/fbctl/internal/config"
 	"github.com/mkrajinovic/fbctl/internal/fakebox"
 	"github.com/mkrajinovic/fbctl/internal/fritz"
+	"github.com/mkrajinovic/fbctl/internal/watch"
 )
 
 var ansi = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
@@ -73,7 +74,9 @@ func press(t *testing.T, m tea.Model, keys ...string) tea.Model {
 	return m
 }
 
-func setup(t *testing.T) (tea.Model, *fakebox.Box) {
+func setup(t *testing.T) (tea.Model, *fakebox.Box) { return setupState(t, t.TempDir()) }
+
+func setupState(t *testing.T, stateDir string) (tea.Model, *fakebox.Box) {
 	fb := fakebox.New()
 	t.Cleanup(fb.Close)
 	host, port := fb.HostPort()
@@ -82,7 +85,7 @@ func setup(t *testing.T) (tea.Model, *fakebox.Box) {
 		b, err := fritz.Connect(ctx, name, r, fakebox.Password, fritz.ConnectOptions{Timeout: 5 * time.Second})
 		return b, host, err
 	}
-	var m tea.Model = New(Options{Routers: []string{"home", "office"}, Current: "home", Connect: conn, NoCallmon: true})
+	var m tea.Model = New(Options{Routers: []string{"home", "office"}, Current: "home", Connect: conn, NoCallmon: true, StateDir: stateDir})
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = pump(t, m, m.(Model).connect())
 	return m, fb
@@ -455,5 +458,25 @@ func TestHostAdminKeysAndTemplates(t *testing.T) {
 	m = press(t, m, "8", "j", "j", "space", "y")
 	if c := fb.CallsTo("aha", "applytemplate"); len(c) != 1 || !strings.Contains(c[0].Body, "tmp6F0093-39512EE15") {
 		t.Fatalf("template %+v", c)
+	}
+}
+
+func TestHostsSignalAndPresence(t *testing.T) {
+	dir := t.TempDir()
+	st, _ := watch.NewState(watch.KnownPath(dir, "home"))
+	st.Update(watch.Snapshot{Time: time.Now().Add(-90 * time.Minute), HostsOK: true,
+		Hosts: []fritz.Host{{MAC: "AA:BB:CC:00:00:01", Name: "laptop", Active: true}}})
+	m, _ := setupState(t, dir)
+	m = press(t, m, "2")
+	v := plain(m.View())
+	if !strings.Contains(v, "▮▮▮▮  74 5 GHz") {
+		t.Fatalf("no signal column:\n%s", v)
+	}
+	m = press(t, m, "s", "enter") // sort by name: laptop first
+	v = plain(m.View())
+	for _, want := range []string{"excellent", "866 / 780 Mbit/s", "home since", "fb watch not running"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("details missing %q\n%s", want, v)
+		}
 	}
 }

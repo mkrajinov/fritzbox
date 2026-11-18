@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -15,6 +16,7 @@ import (
 	"github.com/mkrajinovic/fbctl/internal/fritz"
 	"github.com/mkrajinovic/fbctl/internal/tr064"
 	"github.com/mkrajinovic/fbctl/internal/ui"
+	"github.com/mkrajinovic/fbctl/internal/watch"
 )
 
 type tab int
@@ -53,7 +55,8 @@ type Options struct {
 	Routers   []string
 	Current   string
 	Connect   Connector
-	NoCallmon bool // tests
+	NoCallmon bool   // tests
+	StateDir  string // where fb watch keeps presence data; empty = the default (tests override)
 }
 
 // Model is the root Bubble Tea model.
@@ -87,6 +90,8 @@ type Model struct {
 	hostSort   string // ip, name, active
 	detail     bool   // hosts: show details of the selected host
 	access     map[string]string
+	wifi       map[string]fritz.WLANClient // Wi-Fi signal by MAC (box radios only)
+	presence   *watch.PresenceFile         // from fb watch
 	hostInfo   map[string]fritz.HostInfo
 	profiles   []fritz.FilterProfile
 
@@ -159,9 +164,11 @@ type (
 		err error
 	}
 	hostsMsg struct {
-		gen   int
-		hosts []fritz.Host
-		err   error
+		gen      int
+		hosts    []fritz.Host
+		wifi     map[string]fritz.WLANClient // by MAC; nil when the box gave none
+		presence *watch.PresenceFile         // nil without fb watch data
+		err      error
 	}
 	wlansMsg struct {
 		gen int
@@ -224,6 +231,18 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+// presencePath is where `fb watch` keeps the current router's presence data.
+func (m Model) presencePath() string {
+	if m.opt.StateDir != "" {
+		return watch.KnownPath(m.opt.StateDir, m.routerName())
+	}
+	p, err := watch.DefaultKnownPath(m.routerName())
+	if err != nil {
+		return ""
+	}
+	return p
+}
+
 func (m Model) routerName() string {
 	if len(m.opt.Routers) == 0 {
 		return ""
@@ -252,6 +271,7 @@ func (m *Model) switchRouter(delta int) tea.Cmd {
 	m.upHist, m.downHist = nil, nil
 	m.hosts, m.wlans, m.calls, m.devs, m.events = nil, nil, nil, nil, nil
 	m.mesh, m.logEvs, m.detail, m.access = nil, nil, false, nil
+	m.wifi, m.presence = nil, nil
 	m.resetAdmin()
 	m.books, m.book, m.contacts, m.input = nil, 0, nil, nil
 	m.rateBusy, m.statusBusy = false, false
@@ -291,11 +311,28 @@ func (m Model) fetchTab(t tab) tea.Cmd {
 	case tabOverview:
 		return m.fetchStatus()
 	case tabHosts:
+		state := m.presencePath()
 		return func() tea.Msg {
 			c, cancel := ctx()
 			defer cancel()
-			h, err := b.Hosts(c)
-			return hostsMsg{gen, h, err}
+			msg := hostsMsg{gen: gen}
+			var wg sync.WaitGroup
+			wg.Go(func() {
+				if cs, err := b.WLANAssociations(c); err == nil && len(cs) > 0 {
+					msg.wifi = make(map[string]fritz.WLANClient, len(cs))
+					for _, cl := range cs {
+						msg.wifi[strings.ToUpper(cl.MAC)] = cl
+					}
+				}
+			})
+			if state != "" {
+				if p, err := watch.LoadPresence(state); err == nil {
+					msg.presence = &p
+				}
+			}
+			msg.hosts, msg.err = b.Hosts(c)
+			wg.Wait()
+			return msg
 		}
 	case tabMesh:
 		return func() tea.Msg {
@@ -482,7 +519,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case hostsMsg:
 		if msg.gen == m.gen {
-			m.hosts = msg.hosts
+			m.hosts, m.wifi, m.presence = msg.hosts, msg.wifi, msg.presence
 			m.setFlash(msg.err)
 			m.clampCursor(tabHosts, len(m.visibleHosts()))
 		}

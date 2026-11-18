@@ -34,15 +34,23 @@ const (
 	KindWANUp        Kind = "wan-up"
 	KindMissedCall   Kind = "missed-call"
 	KindIncomingCall Kind = "incoming-call"
+	KindArrived      Kind = "arrived" // a device became active (presence)
+	KindLeft         Kind = "left"    // a device has been inactive for AwayAfter
 )
 
 // Event is one notification.
 type Event struct {
+	Router  string      `json:"router,omitempty"`
 	Time    time.Time   `json:"time"`
 	Kind    Kind        `json:"kind"`
 	Message string      `json:"message"`
 	Host    *fritz.Host `json:"host,omitempty"`
 	Call    *fritz.Call `json:"call,omitempty"`
+	// Since is when a presence change actually happened: for "left" the last time the
+	// device was seen active, which is earlier than Time.
+	Since time.Time `json:"since,omitzero"`
+	// Initial marks the current state published once at start (only sent to MQTT).
+	Initial bool `json:"initial,omitempty"`
 }
 
 // Snapshot is the result of one poll. Each source has its own OK flag: a source
@@ -61,20 +69,33 @@ type Snapshot struct {
 	Calls   []fritz.Call
 }
 
-// KnownDevice is a persisted MAC.
+// KnownDevice is a persisted MAC with its presence state.
 type KnownDevice struct {
 	Name      string    `json:"name,omitempty"`
 	FirstSeen time.Time `json:"first_seen"`
+	Home      bool      `json:"home,omitempty"`     // active now, or inactive for less than AwayAfter
+	Since     time.Time `json:"since,omitzero"`     // when Home last changed (zero = unknown)
+	LastSeen  time.Time `json:"last_seen,omitzero"` // last poll in which the device was active
 }
 
 type knownFile struct {
 	Devices map[string]KnownDevice `json:"devices"`
+	Updated time.Time              `json:"updated,omitzero"`       // last successful host poll
+	Every   int                    `json:"poll_seconds,omitempty"` // fb watch poll interval
 }
 
 // State tracks what has been seen so far.
 type State struct {
 	path  string
 	known map[string]KnownDevice
+
+	// AwayAfter is how long a device must be inactive before it counts as gone.
+	// Phones drop off Wi-Fi while asleep; a short value causes leave/arrive flapping.
+	AwayAfter time.Duration
+	// Interval is the poll interval, stored so readers can tell when the data is stale.
+	Interval time.Duration
+	updated  time.Time // last successful host poll
+	saved    time.Time // last write to disk
 
 	hostsSeeded  bool
 	statusSeeded bool
@@ -86,7 +107,7 @@ type State struct {
 
 // NewState loads known MACs from path (a missing file is fine). An empty path disables persistence.
 func NewState(path string) (*State, error) {
-	s := &State{path: path, known: map[string]KnownDevice{}}
+	s := &State{path: path, known: map[string]KnownDevice{}, AwayAfter: DefaultAwayAfter}
 	if path == "" {
 		return s, nil
 	}
@@ -101,6 +122,7 @@ func NewState(path string) (*State, error) {
 	if err := json.Unmarshal(data, &f); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	s.updated = f.Updated
 	for mac, d := range f.Devices {
 		if m := normMAC(mac); m != "" {
 			s.known[m] = d
@@ -144,9 +166,16 @@ func (s *State) Update(snap Snapshot) ([]Event, error) {
 				evs = append(evs, Event{Time: now, Kind: KindNewDevice, Message: "new device: " + describeHost(h), Host: &h})
 			}
 		}
-		s.hostsSeeded = true
-		if changed {
+		pevs, pchanged := s.updatePresence(now, snap.Hosts)
+		if s.hostsSeeded {
+			evs = append(evs, pevs...)
+		}
+		s.hostsSeeded, s.updated = true, now
+		// Transitions are written at once; otherwise a heartbeat keeps "updated" and
+		// "last seen" fresh so `fb seen` can tell current data from stale data.
+		if changed || pchanged || now.Sub(s.saved) >= saveEvery {
 			saveErr = s.save()
+			s.saved = now
 		}
 	}
 
@@ -230,7 +259,7 @@ func (s *State) save() error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(knownFile{Devices: s.known}, "", "  ")
+	data, err := json.MarshalIndent(knownFile{Devices: s.known, Updated: s.updated, Every: int(s.Interval / time.Second)}, "", "  ")
 	if err != nil {
 		return err
 	}

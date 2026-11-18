@@ -8,11 +8,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/zalando/go-keyring"
 
 	"github.com/mkrajinovic/fbctl/internal/config"
 	"github.com/mkrajinovic/fbctl/internal/fakebox"
+	"github.com/mkrajinovic/fbctl/internal/fritz"
+	"github.com/mkrajinovic/fbctl/internal/watch"
 )
 
 func setupCLI(t *testing.T) (*fakebox.Box, func(args ...string) (string, error)) {
@@ -151,6 +154,8 @@ func TestCLIAdminCommands(t *testing.T) {
 		{[]string{"wlan", "set", "guest", "--ssid", "Visitors", "--channel", "11", "--hidden", "true", "-y"}, []string{"SSID: Visitors", "channel: 11", "hidden"}},
 		{[]string{"wlan", "wps", "2.4", "--wait=false"}, []string{"press WPS on the device"}},
 		{[]string{"wlan", "all", "on"}, []string{"all WLANs"}},
+		{[]string{"wlan", "clients"}, []string{"AA:BB:CC:00:00:09", "weak", "laptop", "excellent", "866", "1201"}},
+		{[]string{"wlan", "clients", "--sort", "signal"}, []string{"laptop"}},
 		{[]string{"home", "templates"}, []string{"Guest WLAN on", "tmp6F0093-39512EE15"}},
 		{[]string{"home", "apply", "guest wlan on"}, []string{"applied Guest WLAN on"}},
 	}
@@ -191,5 +196,60 @@ func TestCLISecondFactor(t *testing.T) {
 	}
 	if !strings.Contains(got, "press any button on the FRITZ!Box, or dial *1234") {
 		t.Fatalf("no instructions:\n%s", got)
+	}
+}
+
+func TestCLISeen(t *testing.T) {
+	_, run := setupCLI(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	if _, err := run("seen"); err == nil || !strings.Contains(err.Error(), "run `fb watch`") {
+		t.Fatalf("without data: %v", err)
+	}
+	path, err := watch.DefaultKnownPath("home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := watch.NewState(path)
+	s.AwayAfter = time.Minute
+	now := time.Now()
+	hosts := func(phoneActive bool) watch.Snapshot {
+		return watch.Snapshot{HostsOK: true, Hosts: []fritz.Host{
+			{MAC: "AA:00:00:00:00:01", Name: "anna-phone", Active: phoneActive},
+			{MAC: "AA:00:00:00:00:02", Name: "tv", Active: true},
+		}}
+	}
+	snap := hosts(true)
+	snap.Time = now.Add(-2 * time.Hour)
+	s.Update(snap)
+	snap = hosts(false)
+	snap.Time = now.Add(-time.Minute)
+	evs, _ := s.Update(snap)
+	if err := watch.AppendHistory(watch.HistoryPath(path), evs); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := run("seen")
+	if err != nil || !strings.Contains(out, "home since") || !strings.Contains(out, "away since") || strings.Index(out, "tv") > strings.Index(out, "anna-phone") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if out, _ := run("seen", "--home"); strings.Contains(out, "anna-phone") {
+		t.Fatalf("--home shows away device:\n%s", out)
+	}
+	out, err = run("seen", "anna-phone")
+	if err != nil || !strings.Contains(out, "left") || !strings.Contains(out, "first seen") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+}
+
+func TestCLIWlanClientsRepeaterNote(t *testing.T) {
+	_, run := setupCLI(t)
+	out, err := run("wlan", "clients", "--json")
+	if err != nil || !strings.Contains(out, `"signal": 74`) {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if _, err := run("wlan", "clients", "--sort", "x"); err == nil {
+		t.Fatal("bad sort accepted")
 	}
 }

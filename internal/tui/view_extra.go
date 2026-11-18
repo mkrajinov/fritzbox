@@ -3,9 +3,11 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/mkrajinovic/fbctl/internal/fritz"
 	"github.com/mkrajinovic/fbctl/internal/ui"
+	"github.com/mkrajinovic/fbctl/internal/watch"
 )
 
 func (m Model) hostDetail(h fritz.Host, w int) string {
@@ -30,8 +32,21 @@ func (m Model) hostDetail(h fritz.Host, w int) string {
 		row("ip", h.IP, net),
 		row("id", h.MAC, "MAC address"),
 		row("⇄", orDash(link), "connection"),
-		row("⇅", accessText(access), "internet access"),
 	}
+	if c, ok := m.wifi[strings.ToUpper(h.MAC)]; ok {
+		rows = append(rows, row(ui.GlyphWLAN, ui.Signal(c.Signal)+" "+fritz.SignalLabel(c.Signal),
+			fmt.Sprintf("%s · %d / %d Mbit/s (TX/RX), max %d", wlanName(c), c.Speed, c.SpeedRX, c.SpeedMax)))
+	} else if h.Active && strings.HasPrefix(h.Interface, "802.11") && m.wifi != nil {
+		rows = append(rows, row(ui.GlyphWLAN, ui.Muted.Render("no signal data"), "not on the box's radios (repeater?)"))
+	}
+	if pr := m.presenceOf(h); pr != nil {
+		hint := "presence (fb watch)"
+		if m.presence.Stale(time.Now()) {
+			hint = "fb watch not running, last data " + ui.When(m.presence.Updated, time.Now())
+		}
+		rows = append(rows, row(ui.GlyphHosts, ui.Presence(pr.Home, pr.Since, time.Now()), hint))
+	}
+	rows = append(rows, row("⇅", accessText(access), "internet access"))
 	if hi, ok := m.hostInfo[h.IP]; ok {
 		rows = append(rows,
 			row("⧗", m.profileName(hi.ProfileID), onlineTimeText(hi)),
@@ -86,4 +101,26 @@ func (m Model) logView(w int) string {
 		group = g
 	}
 	return ui.Card(fmt.Sprintf("Event log · %s · %d events", group, len(m.logEvs)), strings.Join(lines, "\n"), w)
+}
+
+func wlanName(c fritz.WLANClient) string {
+	switch {
+	case c.Guest:
+		return "guest " + c.Band + " GHz"
+	case c.Band != "":
+		return c.Band + " GHz"
+	}
+	return fmt.Sprintf("WLAN %d", c.WLAN)
+}
+
+func (m Model) presenceOf(h fritz.Host) *watch.Presence {
+	if m.presence == nil {
+		return nil
+	}
+	for i, d := range m.presence.Devices {
+		if strings.EqualFold(d.MAC, h.MAC) {
+			return &m.presence.Devices[i]
+		}
+	}
+	return nil
 }

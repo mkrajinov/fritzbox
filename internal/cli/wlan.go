@@ -2,7 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/skip2/go-qrcode"
 	"github.com/spf13/cobra"
@@ -116,7 +118,7 @@ func wlanCmd(a *app) *cobra.Command {
 	}
 	qr.Flags().BoolVar(&showPW, "show-password", false, "also print the passphrase")
 	qr.Flags().StringVar(&png, "png", "", "write the QR code to a PNG file instead")
-	cmd.AddCommand(qr, wlanPasswordCmd(a))
+	cmd.AddCommand(qr, wlanPasswordCmd(a), wlanClientsCmd(a))
 	return cmd
 }
 
@@ -125,4 +127,79 @@ func chanStr(c int) string {
 		return "auto"
 	}
 	return strconv.Itoa(c)
+}
+
+func wlanClientsCmd(a *app) *cobra.Command {
+	var sortBy string
+	cmd := &cobra.Command{
+		Use: "clients", Aliases: []string{"devices"}, Short: "Devices on the box's WLANs with signal strength and link rate",
+		Long: "Lists devices connected to the box's own radios with signal strength (0–100), current\n" +
+			"rates in Mbit/s (TX = box to device, RX = device to box) and the best rate the link\n" +
+			"supports. Devices on mesh repeaters are not reported by the box; they are listed by\n" +
+			"name below the table.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if sortBy != "signal" && sortBy != "name" && sortBy != "wlan" {
+				return fmt.Errorf("--sort must be signal, name or wlan")
+			}
+			ctx, cancel := a.ctx(cmd)
+			defer cancel()
+			b, err := a.box(ctx)
+			if err != nil {
+				return err
+			}
+			cs, err := b.WLANClients(ctx)
+			if err != nil {
+				return err
+			}
+			sortClients(cs, sortBy)
+			if a.asJSON {
+				return a.printJSON(cs)
+			}
+			rows := make([][]string, 0, len(cs))
+			for _, c := range cs {
+				net := c.Band + " GHz"
+				if c.Guest {
+					net = "Guest"
+				} else if c.Band == "" {
+					net = "WLAN " + strconv.Itoa(c.WLAN)
+				}
+				rate := fmt.Sprintf("%d / %d", c.Speed, c.SpeedRX)
+				best := ""
+				if c.SpeedMax > 0 {
+					best = strconv.Itoa(c.SpeedMax)
+				}
+				rows = append(rows, []string{ui.Signal(c.Signal), fritz.SignalLabel(c.Signal), orDash(c.Name), c.IP, c.MAC, net, rate, best})
+			}
+			if len(rows) > 0 {
+				a.printTable([]string{"SIGNAL", "", "NAME", "IP", "MAC", "NETWORK", "TX / RX MBIT/S", "MAX"}, rows)
+			} else {
+				fmt.Fprintln(a.out, ui.Muted.Render("no devices on the box's WLANs"))
+			}
+			if hosts, err := b.Hosts(ctx); err == nil {
+				if rest := fritz.WiFiHostsNotOnBox(hosts, cs); len(rest) > 0 {
+					names := make([]string, len(rest))
+					for i, h := range rest {
+						names[i] = orDash(h.Name)
+					}
+					fmt.Fprintln(a.out, ui.Muted.Render(fmt.Sprintf("\n%d more Wi-Fi devices are active but not on the box's radios (likely on a repeater, no signal data): %s",
+						len(rest), strings.Join(names, ", "))))
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&sortBy, "sort", "wlan", "wlan (then strongest first), signal (weakest first) or name")
+	return cmd
+}
+
+func sortClients(cs []fritz.WLANClient, by string) {
+	switch by {
+	case "signal":
+		slices.SortStableFunc(cs, func(x, y fritz.WLANClient) int { return x.Signal - y.Signal })
+	case "name":
+		slices.SortStableFunc(cs, func(x, y fritz.WLANClient) int {
+			return strings.Compare(strings.ToLower(x.Name), strings.ToLower(y.Name))
+		})
+	}
 }

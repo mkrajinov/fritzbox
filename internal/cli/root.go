@@ -104,7 +104,7 @@ func newRoot(out, errOut io.Writer) *cobra.Command {
 	root.AddCommand(
 		routerCmd(a), statusCmd(a), hostsCmd(a), reconnectCmd(a), rebootCmd(a),
 		wlanCmd(a), callsCmd(a), phonebookCmd(a), homeCmd(a), rawCmd(a), tuiCmd(a),
-		meshCmd(a), logCmd(a), exporterCmd(a), watchCmd(a),
+		meshCmd(a), logCmd(a), exporterCmd(a), watchCmd(a), seenCmd(a),
 	)
 	adminCmds(a, root)
 	return root

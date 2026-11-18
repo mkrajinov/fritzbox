@@ -60,6 +60,7 @@ fb profiles                                    list access profiles
 fb wlan wps <wlan> [--stop]                    push-button WPS, waits until a device joins
 fb wlan all on|off                             all radios, like the WLAN button
 fb wlan set <wlan> [--ssid X] [--channel N|auto] [--hidden true|false]
+fb wlan clients [--sort wlan|signal|name]      Wi-Fi devices: signal, TX/RX rate, band (box radios only)
 fb tam [machines | mark <t:i> | delete <t:i> | switch <t> on|off]   answering machine
 fb forward [on|off <id>]                       call forwarding rules (created in the web UI)
 fb dial <number|contact> [--phone NAME] | fb hangup   dialing help: rings your phone, then calls
@@ -69,7 +70,10 @@ fb backup [-o file]                            encrypted config export ($FB_BACK
 fb dhcp [range <first> <last>]                 DHCP server and address range
 fb remote [https|letsencrypt|myfritz on|off]   internet access to the box, DynDNS status
 fb watch [--interval 30s] [--no-notify]        desktop notifications: new device, internet down/up,
-                                               missed and incoming calls
+                                               missed and incoming calls; records who is home
+         [--track anna-phone,…] [--away-after 10m]   announce arrivals/departures of these devices
+         [--webhook URL] [--ntfy URL] [--mqtt mqtt://user@host]   forward events (see below)
+fb seen [device] [--home]                      who is home and since when (data from fb watch)
 fb raw services | actions <svc> | call <svc> <action> Name=value...
 fb exporter [--listen 127.0.0.1:9133]          Prometheus metrics for all profiles on /metrics
 fb tui                                         also the default with no args in a terminal
@@ -85,7 +89,8 @@ Tabs: Overview · Hosts · Mesh · WLAN · Calls · Contacts · Phone · Smart H
 `j`/`k` move, `r` refresh, `?` help.
 
 - Overview: `A` status of all routers, `R` reconnect, `B` reboot (both confirm).
-- Hosts: `/` filter, `a` active only, `s` cycle sort, `enter` details (internet access, access profile,
+- Hosts: Wi-Fi devices show signal bars and band; `/` filter, `a` active only, `s` cycle sort, `enter`
+  details (signal and link rate, home/away from `fb watch`, internet access, access profile,
   online time, priority, auto wake), `n` rename, `w` wake, `b`/`u` block/unblock internet, `p` priority,
   `o` auto wake, `f` next access profile (confirms), `t` online-time ticket.
 - WLAN: `space` toggle, `c` QR code, `p`/`P` show/change password, `e` SSID, `n` channel, `H` hide SSID,
@@ -118,6 +123,39 @@ scrape_configs:
     scrape_interval: 30s
     static_configs: [{targets: ["127.0.0.1:9133"]}]
 ```
+
+## Presence and forwarding
+
+`fb watch` records when each device becomes active and when it has been inactive for
+`--away-after` (default 10 min; phones go quiet on Wi-Fi while asleep). `fb seen` and the TUI's host
+details show "home since 18:02" / "away since Mon 08:10" from that data. They warn when `fb watch`
+isn't running, because the data then stops changing. The state lives in
+`~/Library/Application Support/fbctl/known/<router>.json` (Linux: `~/.config/fbctl/known/`), with an
+arrivals/departures log next to it (`<router>.history.jsonl`, trimmed at 1 MiB).
+
+Only devices named with `--track` (names or MACs, `*` for all) are announced. Phones that use a
+private (rotating) Wi-Fi address show up as new devices and never "arrive"; turn that off for the home
+network on tracked phones.
+
+Events can also go elsewhere. URLs and secrets can come from the environment so they don't show in `ps`:
+
+| Flag | Env | What is sent |
+|---|---|---|
+| `--webhook URL` | `FB_WEBHOOK_URL` | every event as JSON (`router`, `kind`, `message`, `host`, `call`, `since`); works with a Home Assistant webhook trigger |
+| `--ntfy URL` | `FB_NTFY_URL`, token `FB_NTFY_TOKEN` | push notification with title `fb · <router>` |
+| `--mqtt mqtt://user@host:1883` (`mqtts://` for TLS) | `FB_MQTT_URL`, password `FB_MQTT_PASSWORD` | `fb/<router>/event` (JSON), `fb/<router>/presence/<device>` = `home`/`not_home` (retained), `fb/<router>/internet` = `online`/`offline` (retained) |
+
+The MQTT presence topics fit Home Assistant's MQTT device tracker:
+
+```yaml
+mqtt:
+  device_tracker:
+    - name: Anna
+      state_topic: fb/home/presence/anna-phone
+```
+
+Sends run in the background, in order, with a 10 s timeout. A failing target is reported once, and
+again when it recovers. Error messages never include the URL.
 
 ## Second factor
 
@@ -164,6 +202,9 @@ check on live hardware (capture with `fb -v raw call …`, scrub secrets, add to
   Authentication PDF; the box's action list was checked against its SCPD)
 - the format of `GetFilterProfiles` (parsed loosely: XML items with ID/Name, or `id:name` pairs)
 - `SetChannel` with 0 for automatic channel selection
+- the XML behind `X_AVM-DE_GetWLANDeviceListPath` (parsed loosely by element-name suffix) and the unit
+  of `X_AVM-DE_SignalStrength` (shown as 0–100). Check with
+  `fb -v raw call WLANConfiguration1 X_AVM-DE_GetWLANDeviceListPath` and open the returned path
 - the absolute URL `X_AVM-DE_GetConfigFile` returns (fb rewrites the host to the configured address)
 
 Action and argument names for all new features were checked against the SCPD files of a FRITZ!Box

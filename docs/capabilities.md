@@ -46,6 +46,7 @@ Legend: ✅ implemented in fb · ○ documented, not implemented · ✗ not avai
 | WPS push button | ✅ `fb wlan wps`, TUI `W` | `X_AVM-DE_SetWPSConfig` (NewX_AVM-DE_WPSMode = pbc/stop) |
 | SSID, channel, hidden | ✅ `fb wlan set`, TUI `e`/`n`/`H` | `SetSSID`, `SetChannel`, `SetBeaconAdvertisement` |
 | All radios off (like the WLAN button) | ✅ `fb wlan all`, TUI `O` | `X_AVM-DE_SetWLANGlobalEnable` |
+| Signal and link rate per device | ✅ `fb wlan clients`, TUI Hosts | `X_AVM-DE_GetWLANDeviceListPath` (fallback `GetGenericAssociatedDeviceInfo`). Box radios only; repeater clients are listed without signal. |
 | Guest timeout, night mode | read only | `X_AVM-DE_GetWLANExtInfo`, `X_AVM-DE_GetNightControl`. Setting them is web UI only. |
 
 ## Telephony
@@ -69,6 +70,12 @@ Legend: ✅ implemented in fb · ○ documented, not implemented · ✗ not avai
 | Smart home switch and thermostat | ✅ | AHA `homeautoswitch.lua` |
 | Smart home templates (e.g. guest WLAN template) | ✅ `fb home templates/apply`, TUI Smart Home | AHA `gettemplatelistinfos`, `applytemplate`, `settriggeractive` |
 | USB devices, LED or button lock, internet speed test | ✗ | `X_AVM-DE_Speedtest` only runs the box's local test server |
+
+## Presence (✅ implemented)
+
+`fb watch` works out home/away from the host list's `Active` flag (with an away delay). It stores the
+result for `fb seen` and the TUI, and forwards events to a webhook, ntfy or MQTT. No extra box
+interface is needed.
 
 ## Second factor (✅ implemented)
 

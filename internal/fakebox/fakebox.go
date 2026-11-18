@@ -73,6 +73,8 @@ func New() *Box {
 	})
 	mux.HandleFunc("/devicehostlist.lua", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, hostList) })
 	mux.HandleFunc("/calllist.lua", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, callList) })
+	mux.HandleFunc("/wlandevicelist1.lua", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, wlanDevices1) })
+	mux.HandleFunc("/wlandevicelist2.lua", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, wlanDevices2) })
 	mux.HandleFunc("/meshlist.lua", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, meshList) })
 	mux.HandleFunc("/devicelog.lua", func(w http.ResponseWriter, r *http.Request) {
 		b.mu.Lock()
@@ -330,6 +332,8 @@ func defaultResponses() map[string]map[string]string {
 		"wlanconfig1#GetTotalAssociations":            {"NewTotalAssociations": "4"},
 		"wlanconfig2#GetTotalAssociations":            {"NewTotalAssociations": "7"},
 		"wlanconfig3#GetTotalAssociations":            {"NewTotalAssociations": "0"},
+		"wlanconfig1#X_AVM-DE_GetWLANDeviceListPath":  {"NewX_AVM-DE_WLANDeviceListPath": "/wlandevicelist1.lua?sid=deadbeef"},
+		"wlanconfig2#X_AVM-DE_GetWLANDeviceListPath":  {"NewX_AVM-DE_WLANDeviceListPath": "/wlandevicelist2.lua?sid=deadbeef"},
 		"wlanconfig1#GetBeaconAdvertisement":          {"NewBeaconAdvertisementEnabled": "1"},
 		"wlanconfig2#GetBeaconAdvertisement":          {"NewBeaconAdvertisementEnabled": "1"},
 		"wlanconfig3#GetBeaconAdvertisement":          {"NewBeaconAdvertisementEnabled": "1"},
@@ -463,6 +467,18 @@ const hostList = `<?xml version="1.0" ?>
 <Item><Index>1</Index><IPAddress>192.168.178.20</IPAddress><MACAddress>AA:BB:CC:00:00:01</MACAddress><Active>1</Active><HostName>laptop</HostName><InterfaceType>802.11</InterfaceType><X_AVM-DE_Port>0</X_AVM-DE_Port><X_AVM-DE_Speed>866</X_AVM-DE_Speed><X_AVM-DE_Guest>0</X_AVM-DE_Guest></Item>
 <Item><Index>2</Index><IPAddress>192.168.178.3</IPAddress><MACAddress>AA:BB:CC:00:00:02</MACAddress><Active>1</Active><HostName>nas</HostName><InterfaceType>Ethernet</InterfaceType><X_AVM-DE_Port>1</X_AVM-DE_Port><X_AVM-DE_Speed>1000</X_AVM-DE_Speed><X_AVM-DE_Guest>0</X_AVM-DE_Guest></Item>
 <Item><Index>3</Index><IPAddress>192.168.179.5</IPAddress><MACAddress>AA:BB:CC:00:00:03</MACAddress><Active>0</Active><HostName>visitor-phone</HostName><InterfaceType>802.11</InterfaceType><X_AVM-DE_Port>0</X_AVM-DE_Port><X_AVM-DE_Speed>0</X_AVM-DE_Speed><X_AVM-DE_Guest>1</X_AVM-DE_Guest></Item>
+</List>`
+
+// WLAN device lists (X_AVM-DE_GetWLANDeviceListPath). wlanconfig3 has no list action, so the
+// client falls back to GetTotalAssociations (0 for the disabled guest WLAN).
+const wlanDevices1 = `<?xml version="1.0" ?>
+<List><TotalAssociations>1</TotalAssociations>
+<Item><AssociatedDeviceIndex>0</AssociatedDeviceIndex><AssociatedDeviceMACAddress>aa:bb:cc:00:00:09</AssociatedDeviceMACAddress><AssociatedDeviceIPAddress>192.168.178.41</AssociatedDeviceIPAddress><AssociatedDeviceAuthState>1</AssociatedDeviceAuthState><X_AVM-DE_Speed>65</X_AVM-DE_Speed><X_AVM-DE_SignalStrength>22</X_AVM-DE_SignalStrength><X_AVM-DE_SpeedRX>24</X_AVM-DE_SpeedRX><X_AVM-DE_SpeedMax>144</X_AVM-DE_SpeedMax></Item>
+</List>`
+
+const wlanDevices2 = `<?xml version="1.0" ?>
+<List><TotalAssociations>1</TotalAssociations>
+<Item><AssociatedDeviceIndex>0</AssociatedDeviceIndex><AssociatedDeviceMACAddress>AA:BB:CC:00:00:01</AssociatedDeviceMACAddress><AssociatedDeviceIPAddress>192.168.178.20</AssociatedDeviceIPAddress><AssociatedDeviceAuthState>1</AssociatedDeviceAuthState><X_AVM-DE_Speed>866</X_AVM-DE_Speed><X_AVM-DE_SignalStrength>74</X_AVM-DE_SignalStrength><X_AVM-DE_SpeedRX>780</X_AVM-DE_SpeedRX><X_AVM-DE_SpeedMax>1201</X_AVM-DE_SpeedMax></Item>
 </List>`
 
 const callList = `<?xml version="1.0" encoding="UTF-8"?>
