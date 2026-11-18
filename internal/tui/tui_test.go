@@ -457,7 +457,7 @@ func TestHostAdminKeysAndTemplates(t *testing.T) {
 	}
 	m = press(t, m, "8", "j", "j", "space", "y")
 	if c := fb.CallsTo("aha", "applytemplate"); len(c) != 1 || !strings.Contains(c[0].Body, "tmp6F0093-39512EE15") {
-		t.Fatalf("template %+v", c)
+		t.Fatalf("template %+v\n%s", c, plain(m.View()))
 	}
 }
 

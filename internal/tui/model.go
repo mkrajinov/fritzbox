@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -166,9 +165,13 @@ type (
 	hostsMsg struct {
 		gen      int
 		hosts    []fritz.Host
-		wifi     map[string]fritz.WLANClient // by MAC; nil when the box gave none
-		presence *watch.PresenceFile         // nil without fb watch data
+		presence *watch.PresenceFile // nil without fb watch data
 		err      error
+	}
+	// wifiMsg arrives separately so a slow device-list download never holds back the hosts.
+	wifiMsg struct {
+		gen  int
+		wifi map[string]fritz.WLANClient // by MAC; nil when the box gave none
 	}
 	wlansMsg struct {
 		gen int
@@ -312,28 +315,31 @@ func (m Model) fetchTab(t tab) tea.Cmd {
 		return m.fetchStatus()
 	case tabHosts:
 		state := m.presencePath()
-		return func() tea.Msg {
+		hosts := func() tea.Msg {
 			c, cancel := ctx()
 			defer cancel()
 			msg := hostsMsg{gen: gen}
-			var wg sync.WaitGroup
-			wg.Go(func() {
-				if cs, err := b.WLANAssociations(c); err == nil && len(cs) > 0 {
-					msg.wifi = make(map[string]fritz.WLANClient, len(cs))
-					for _, cl := range cs {
-						msg.wifi[strings.ToUpper(cl.MAC)] = cl
-					}
-				}
-			})
 			if state != "" {
 				if p, err := watch.LoadPresence(state); err == nil {
 					msg.presence = &p
 				}
 			}
 			msg.hosts, msg.err = b.Hosts(c)
-			wg.Wait()
 			return msg
 		}
+		wifi := func() tea.Msg {
+			c, cancel := ctx()
+			defer cancel()
+			msg := wifiMsg{gen: gen}
+			if cs, err := b.WLANAssociations(c); err == nil && len(cs) > 0 {
+				msg.wifi = make(map[string]fritz.WLANClient, len(cs))
+				for _, cl := range cs {
+					msg.wifi[strings.ToUpper(cl.MAC)] = cl
+				}
+			}
+			return msg
+		}
+		return tea.Batch(hosts, wifi)
 	case tabMesh:
 		return func() tea.Msg {
 			c, cancel := ctx()
@@ -519,9 +525,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case hostsMsg:
 		if msg.gen == m.gen {
-			m.hosts, m.wifi, m.presence = msg.hosts, msg.wifi, msg.presence
+			m.hosts, m.presence = msg.hosts, msg.presence
 			m.setFlash(msg.err)
 			m.clampCursor(tabHosts, len(m.visibleHosts()))
+		}
+		return m, nil
+	case wifiMsg:
+		if msg.gen == m.gen {
+			m.wifi = msg.wifi
 		}
 		return m, nil
 	case wlansMsg:

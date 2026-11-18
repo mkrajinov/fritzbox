@@ -326,7 +326,7 @@ func (m Model) hostsView(w int) string {
 		h := hosts[i]
 		iface := ui.Muted.Render(h.Interface)
 		if c, ok := m.wifi[strings.ToUpper(h.MAC)]; ok {
-			iface = ui.Signal(c.Signal) + ui.Muted.Render(" "+c.Band+" GHz")
+			iface = ui.Signal(c.Signal) + ui.Muted.Render(" "+wlanName(c))
 		}
 		if h.Guest {
 			iface += ui.Muted.Render(" · guest")

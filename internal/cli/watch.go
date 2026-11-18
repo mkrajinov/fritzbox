@@ -222,6 +222,19 @@ func (w *watcher) poll(parent context.Context) {
 	if err := watch.AppendHistory(w.history, evs); err != nil {
 		w.report(parent, "presence history", err)
 	}
+	// A device the box has never shown before is announced as "new device"; its first
+	// arrival only updates the retained MQTT state instead of notifying twice.
+	fresh := map[string]bool{}
+	for _, e := range evs {
+		if e.Kind == watch.KindNewDevice && e.Host != nil {
+			fresh[strings.ToUpper(e.Host.MAC)] = true
+		}
+	}
+	for i, e := range evs {
+		if e.Kind == watch.KindArrived && e.Host != nil && fresh[strings.ToUpper(e.Host.MAC)] {
+			evs[i].Initial = true
+		}
+	}
 	if snap.HostsOK && !w.initialSent && w.sinks != nil {
 		// Retained MQTT states for tracked devices, so Home Assistant knows them right away.
 		w.initialSent = true
@@ -233,6 +246,13 @@ func (w *watcher) poll(parent context.Context) {
 	for _, e := range evs {
 		if (e.Kind == watch.KindArrived || e.Kind == watch.KindLeft) && !w.track.Match(e.Host) {
 			continue // recorded in the history, not announced
+		}
+		if e.Initial {
+			if w.sinks != nil {
+				e.Router = w.b.Name
+				w.forward(e)
+			}
+			continue
 		}
 		w.emit(parent, e)
 	}

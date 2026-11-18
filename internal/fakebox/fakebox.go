@@ -45,6 +45,7 @@ type Box struct {
 	Plug      string                       // "1"/"0" switch state of the fake plug
 	Target    int                          // thermostat target
 	Blocked   map[string]bool              // IP → internet blocked (X_AVM-DE_HostFilter)
+	HostList  string                       // overrides the default host list XML when set
 
 	// Second factor (X_AVM-DE_Auth): actions in NeedsToken fail with 866 unless they carry
 	// AuthToken in the SOAP header after the user "confirmed". ConfirmAfter is the number of
@@ -71,7 +72,15 @@ func New() *Box {
 		}
 		b.auth(b.soap)(w, r)
 	})
-	mux.HandleFunc("/devicehostlist.lua", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, hostList) })
+	mux.HandleFunc("/devicehostlist.lua", func(w http.ResponseWriter, _ *http.Request) {
+		b.mu.Lock()
+		l := b.HostList
+		b.mu.Unlock()
+		if l == "" {
+			l = hostList
+		}
+		io.WriteString(w, l)
+	})
 	mux.HandleFunc("/calllist.lua", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, callList) })
 	mux.HandleFunc("/wlandevicelist1.lua", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, wlanDevices1) })
 	mux.HandleFunc("/wlandevicelist2.lua", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, wlanDevices2) })
@@ -250,7 +259,7 @@ func serviceByType(_, path string) string {
 // AHA interface.
 
 const (
-	ahaChallenge = "2$10000$5A1711$2000$5A1722"
+	ahaChallenge = "2$100$5A1711$20$5A1722" // few iterations: the real value (10000/2000) makes race-mode tests slow; aha_test checks AVM's example
 	ahaSID       = "9f3c1a2b4d5e6f70"
 )
 
@@ -540,3 +549,22 @@ const tamMessages = `<?xml version="1.0" encoding="utf-8"?>
 <Message><Index>1</Index><Tam>0</Tam><Called>030999</Called><Date>13.11.26 18:40</Date><Duration>0:02</Duration><Inbook>0</Inbook><Name></Name><New>0</New><Number>0301112223</Number><Path>/download.lua?path=/data/tam/rec/rec.0.001</Path></Message></Root>`
 
 const templateList = `<templatelist version="1"><template identifier="tmp6F0093-39512EE15" id="60008" functionbitmask="320" applymask="256"><name>Guest WLAN on</name><devices></devices><applymask><guest_wlan/></applymask></template><template identifier="tmp6F0093-3951300C0" id="60009" functionbitmask="320" applymask="1"><name>Heating holiday</name><devices><device identifier="11960 0012345"/></devices></template></templatelist>`
+
+// SetHostList replaces the host list XML served to clients ("" restores the default).
+func (b *Box) SetHostList(xml string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.HostList = xml
+}
+
+// HostListXML builds a host list from (MAC, name, active) triples.
+func HostListXML(hosts ...[3]string) string {
+	var sb strings.Builder
+	sb.WriteString(`<?xml version="1.0" ?><List>`)
+	for i, h := range hosts {
+		fmt.Fprintf(&sb, `<Item><Index>%d</Index><IPAddress>192.168.178.%d</IPAddress><MACAddress>%s</MACAddress><Active>%s</Active><HostName>%s</HostName><InterfaceType>802.11</InterfaceType></Item>`,
+			i+1, 50+i, h[0], h[2], h[1])
+	}
+	sb.WriteString(`</List>`)
+	return sb.String()
+}
