@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mkrajinovic/fbctl/internal/tr064"
+	"github.com/mkrajinov/fritzbox/internal/tr064"
 )
 
 const tamSvc = "X_AVM-DE_TAM1"

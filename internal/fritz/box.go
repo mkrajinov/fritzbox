@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mkrajinovic/fbctl/internal/aha"
-	"github.com/mkrajinovic/fbctl/internal/config"
-	"github.com/mkrajinovic/fbctl/internal/tr064"
+	"github.com/mkrajinov/fritzbox/internal/aha"
+	"github.com/mkrajinov/fritzbox/internal/config"
+	"github.com/mkrajinov/fritzbox/internal/tr064"
 )
 
 // Box is a connected FRITZ!Box.

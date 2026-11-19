@@ -10,9 +10,9 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/mkrajinovic/fbctl/internal/aha"
-	"github.com/mkrajinovic/fbctl/internal/fritz"
-	"github.com/mkrajinovic/fbctl/internal/ui"
+	"github.com/mkrajinov/fritzbox/internal/aha"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/ui"
 )
 
 // inputPrompt is a one-line text modal (rename a host, set a WLAN password).
@@ -24,7 +24,7 @@ type inputPrompt struct {
 }
 
 func newInput(title, hint, value string, submit func(*Model, string) (tea.Cmd, error)) *inputPrompt {
-	ti := textinput.New()
+	ti := newTextInput()
 	ti.Prompt = "› "
 	ti.CharLimit = 63
 	ti.Width = 48

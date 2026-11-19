@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mkrajinovic/fbctl/internal/tr064"
+	"github.com/mkrajinov/fritzbox/internal/tr064"
 )
 
 // DeviceInfo is DeviceInfo1.GetInfo.

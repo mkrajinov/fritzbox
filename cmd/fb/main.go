@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mkrajinovic/fbctl/internal/cli"
+	"github.com/mkrajinov/fritzbox/internal/cli"
 )
 
 func main() {

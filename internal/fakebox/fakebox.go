@@ -17,7 +17,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mkrajinovic/fbctl/internal/aha"
+	"github.com/mkrajinov/fritzbox/internal/aha"
 )
 
 const (

@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mkrajinovic/fbctl/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
 )
 
 var t0 = time.Date(2026, 11, 18, 18, 0, 0, 0, time.UTC)

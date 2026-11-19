@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mkrajinovic/fbctl/internal/tr064"
+	"github.com/mkrajinov/fritzbox/internal/tr064"
 )
 
 // WLANClient is a device associated with one of the box's own radios. Devices on

@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mkrajinovic/fbctl/internal/fritz"
-	"github.com/mkrajinovic/fbctl/internal/ui"
-	"github.com/mkrajinovic/fbctl/internal/watch"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/ui"
+	"github.com/mkrajinov/fritzbox/internal/watch"
 )
 
 func (m Model) hostDetail(h fritz.Host, w int) string {

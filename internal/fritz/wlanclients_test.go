@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mkrajinovic/fbctl/internal/fakebox"
-	"github.com/mkrajinovic/fbctl/internal/fritz"
-	"github.com/mkrajinovic/fbctl/internal/tr064"
+	"github.com/mkrajinov/fritzbox/internal/fakebox"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/tr064"
 )
 
 func TestWLANClients(t *testing.T) {

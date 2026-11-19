@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mkrajinovic/fbctl/internal/callmon"
-	"github.com/mkrajinovic/fbctl/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/callmon"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
 )
 
 // Kind is the type of an event.

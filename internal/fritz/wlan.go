@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mkrajinovic/fbctl/internal/tr064"
+	"github.com/mkrajinov/fritzbox/internal/tr064"
 )
 
 // WLAN is one WLANConfiguration service.

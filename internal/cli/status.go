@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/mkrajinovic/fbctl/internal/fritz"
-	"github.com/mkrajinovic/fbctl/internal/ui"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/ui"
 )
 
 func statusCmd(a *app) *cobra.Command {

@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mkrajinovic/fbctl/internal/config"
-	"github.com/mkrajinovic/fbctl/internal/fakebox"
-	"github.com/mkrajinovic/fbctl/internal/fritz"
-	"github.com/mkrajinovic/fbctl/internal/watch"
+	"github.com/mkrajinov/fritzbox/internal/config"
+	"github.com/mkrajinov/fritzbox/internal/fakebox"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/watch"
 )
 
 type recSink struct {

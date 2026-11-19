@@ -1,13 +1,62 @@
+# Release: push a tag (git tag v0.1.0 && git push origin v0.1.0); .github/workflows/release.yml
+# builds the archives, creates the GitHub release and updates the Homebrew tap.
+# Local dry run: goreleaser release --snapshot --clean
 version: 2
 project_name: fb
+# Always GitHub, even when GITLAB_TOKEN is set in the environment.
+force_token: github
+
+before:
+  hooks:
+    - go mod tidy
+    - ./scripts/completions.sh
+
 builds:
   - main: ./cmd/fb
+    binary: fb
     env: [CGO_ENABLED=0]
     goos: [darwin, linux]
     goarch: [amd64, arm64]
+    flags: [-trimpath]
     ldflags:
-      - -s -w -X github.com/mkrajinovic/fbctl/internal/cli.Version={{.Version}}
+      - -s -w -X github.com/mkrajinov/fritzbox/internal/cli.Version={{.Version}}
+
 archives:
   - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - completions/*
+
 checksum:
   name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ["^docs:", "^test:", "^chore:"]
+
+homebrew_casks:
+  - name: fb
+    binaries: [fb]
+    homepage: https://github.com/mkrajinov/fritzbox
+    description: CLI and TUI to manage AVM FRITZ!Box routers
+    completions:
+      bash: completions/fb.bash
+      zsh: completions/fb.zsh
+      fish: completions/fb.fish
+    # The binaries are not signed or notarized; without this macOS refuses to run them.
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/fb"]
+          end
+    commit_author:
+      name: Muhamed Krajinovic
+      email: muhamed.krajinovic@gmail.com
+    commit_msg_template: "fb {{ .Tag }}"
+    repository:
+      owner: mkrajinov
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"

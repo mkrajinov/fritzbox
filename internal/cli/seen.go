@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/mkrajinovic/fbctl/internal/ui"
-	"github.com/mkrajinovic/fbctl/internal/watch"
+	"github.com/mkrajinov/fritzbox/internal/ui"
+	"github.com/mkrajinov/fritzbox/internal/watch"
 )
 
 func seenCmd(a *app) *cobra.Command {

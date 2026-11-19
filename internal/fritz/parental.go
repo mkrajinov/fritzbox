@@ -8,7 +8,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/mkrajinovic/fbctl/internal/tr064"
+	"github.com/mkrajinov/fritzbox/internal/tr064"
 )
 
 const hostFilter = "X_AVM-DE_HostFilter1"

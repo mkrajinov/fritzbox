@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/mkrajinovic/fbctl/internal/aha"
-	"github.com/mkrajinovic/fbctl/internal/fritz"
-	"github.com/mkrajinovic/fbctl/internal/ui"
+	"github.com/mkrajinov/fritzbox/internal/aha"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/ui"
 )
 
 func homeCmd(a *app) *cobra.Command {

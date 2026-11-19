@@ -14,9 +14,9 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/mkrajinovic/fbctl/internal/aha"
-	"github.com/mkrajinovic/fbctl/internal/fritz"
-	"github.com/mkrajinovic/fbctl/internal/ui"
+	"github.com/mkrajinov/fritzbox/internal/aha"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/ui"
 )
 
 const routerPoll = 60 * time.Second
@@ -159,7 +159,7 @@ func (m Model) fetchSystem() tea.Cmd {
 }
 
 func tickRouters(gen int) tea.Cmd {
-	return tea.Tick(routerPoll, func(time.Time) tea.Msg { return routerTick{gen} })
+	return tick(routerPoll, func(time.Time) tea.Msg { return routerTick{gen} })
 }
 
 // adminUpdate handles the messages added for the admin features. ok=false means "not mine".
@@ -170,7 +170,7 @@ func (m Model) adminUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 			p := msg.p
 			m.sf, m.confirm, m.input = &p, nil, nil
 		}
-		return m, waitSecondFactor(m.sfCh), true
+		return m, listenSecondFactor(m.sfCh), true
 	case phoneMsg:
 		if msg.gen == m.gen {
 			m.tams, m.msgs, m.defl, m.phoneErr, m.phoneLoad = msg.tams, msg.msgs, msg.defl, msg.err, true

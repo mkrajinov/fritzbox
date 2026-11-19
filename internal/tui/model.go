@@ -7,15 +7,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/mkrajinovic/fbctl/internal/aha"
-	"github.com/mkrajinovic/fbctl/internal/callmon"
-	"github.com/mkrajinovic/fbctl/internal/fritz"
-	"github.com/mkrajinovic/fbctl/internal/tr064"
-	"github.com/mkrajinovic/fbctl/internal/ui"
-	"github.com/mkrajinovic/fbctl/internal/watch"
+	"github.com/mkrajinov/fritzbox/internal/aha"
+	"github.com/mkrajinov/fritzbox/internal/callmon"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/tr064"
+	"github.com/mkrajinov/fritzbox/internal/ui"
+	"github.com/mkrajinov/fritzbox/internal/watch"
 )
 
 type tab int
@@ -48,6 +49,19 @@ const (
 	callmonQueue = 32
 	reqTimeout   = 15 * time.Second
 )
+
+// Test hooks: the tests replace these so that every command they run returns.
+var (
+	tick               = tea.Tick
+	listenSecondFactor = waitSecondFactor
+	cursorMode         = cursor.CursorBlink
+)
+
+func newTextInput() textinput.Model {
+	ti := textinput.New()
+	ti.Cursor.SetMode(cursorMode)
+	return ti
+}
 
 // Options configures the TUI.
 type Options struct {
@@ -137,7 +151,7 @@ type confirmation struct {
 
 // New creates the model.
 func New(o Options) Model {
-	ti := textinput.New()
+	ti := newTextInput()
 	ti.Prompt = "/ "
 	ti.Placeholder = "filter"
 	idx := max(slices.Index(o.Routers, o.Current), 0)
@@ -227,7 +241,7 @@ func ctx() (context.Context, context.CancelFunc) {
 
 // Init connects to the initial router.
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{textinput.Blink, m.connect(), waitSecondFactor(m.sfCh)}
+	cmds := []tea.Cmd{textinput.Blink, m.connect(), listenSecondFactor(m.sfCh)}
 	if len(m.opt.Routers) > 1 {
 		cmds = append(cmds, m.fetchAllStatus(true), tickRouters(m.gen))
 	}
@@ -388,11 +402,11 @@ func (m Model) fetchTab(t tab) tea.Cmd {
 }
 
 func tickRates(gen int) tea.Cmd {
-	return tea.Tick(ratePoll, func(time.Time) tea.Msg { return rateTick{gen} })
+	return tick(ratePoll, func(time.Time) tea.Msg { return rateTick{gen} })
 }
 
 func tickStatus(gen int) tea.Cmd {
-	return tea.Tick(statusPoll, func(time.Time) tea.Msg { return statusTick{gen} })
+	return tick(statusPoll, func(time.Time) tea.Msg { return statusTick{gen} })
 }
 
 func (m Model) action(desc string, refresh tab, f func(context.Context, Backend) error) tea.Cmd {

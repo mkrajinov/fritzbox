@@ -3,7 +3,7 @@ package ui
 import (
 	"fmt"
 
-	"github.com/mkrajinovic/fbctl/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
 )
 
 // MeshHeader renders a mesh node title line (shared with the TUI).

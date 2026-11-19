@@ -13,10 +13,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 
-	"github.com/mkrajinovic/fbctl/internal/config"
-	"github.com/mkrajinovic/fbctl/internal/exporter"
-	"github.com/mkrajinovic/fbctl/internal/fritz"
-	"github.com/mkrajinovic/fbctl/internal/ui"
+	"github.com/mkrajinov/fritzbox/internal/config"
+	"github.com/mkrajinov/fritzbox/internal/exporter"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/ui"
 )
 
 func meshCmd(a *app) *cobra.Command {

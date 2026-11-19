@@ -6,7 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	"github.com/mkrajinovic/fbctl/internal/tui"
+	"github.com/mkrajinov/fritzbox/internal/tui"
 )
 
 func tuiCmd(a *app) *cobra.Command {

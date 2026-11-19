@@ -14,10 +14,10 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/mkrajinovic/fbctl/internal/callmon"
-	"github.com/mkrajinovic/fbctl/internal/config"
-	"github.com/mkrajinovic/fbctl/internal/tr064"
-	"github.com/mkrajinovic/fbctl/internal/ui"
+	"github.com/mkrajinov/fritzbox/internal/callmon"
+	"github.com/mkrajinov/fritzbox/internal/config"
+	"github.com/mkrajinov/fritzbox/internal/tr064"
+	"github.com/mkrajinov/fritzbox/internal/ui"
 )
 
 func routerCmd(a *app) *cobra.Command {

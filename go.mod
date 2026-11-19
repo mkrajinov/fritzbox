@@ -1,4 +1,4 @@
-module github.com/mkrajinovic/fbctl
+module github.com/mkrajinov/fritzbox
 
 go 1.27.4
 

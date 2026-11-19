@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mkrajinovic/fbctl/internal/fakebox"
-	"github.com/mkrajinovic/fbctl/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/fakebox"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
 )
 
 func TestFirmwareBackupDHCPRemote(t *testing.T) {

@@ -9,9 +9,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
-	"github.com/mkrajinovic/fbctl/internal/config"
-	"github.com/mkrajinovic/fbctl/internal/fakebox"
-	"github.com/mkrajinovic/fbctl/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/config"
+	"github.com/mkrajinov/fritzbox/internal/fakebox"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
 )
 
 func TestCollect(t *testing.T) {

@@ -2,17 +2,19 @@ package tui
 
 import (
 	"context"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/mkrajinovic/fbctl/internal/config"
-	"github.com/mkrajinovic/fbctl/internal/fakebox"
-	"github.com/mkrajinovic/fbctl/internal/fritz"
-	"github.com/mkrajinovic/fbctl/internal/watch"
+	"github.com/mkrajinov/fritzbox/internal/config"
+	"github.com/mkrajinov/fritzbox/internal/fakebox"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/watch"
 )
 
 var ansi = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
@@ -21,6 +23,15 @@ func plain(s string) string { return ansi.ReplaceAllString(s, "") }
 
 // pump executes commands and feeds their messages back into the model, skipping
 // long-running commands (ticks, cursor blink) that don't return quickly.
+// TestMain disables timers, the second-factor listener and cursor blinking, so every command
+// returns and pump can wait for each one instead of guessing with a timeout.
+func TestMain(m *testing.M) {
+	tick = func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { return nil }
+	listenSecondFactor = func(chan fritz.SecondFactorPrompt) tea.Cmd { return nil }
+	cursorMode = cursor.CursorStatic
+	os.Exit(m.Run())
+}
+
 func pump(t *testing.T, m tea.Model, cmd tea.Cmd) tea.Model {
 	t.Helper()
 	queue := []tea.Cmd{cmd}
@@ -35,8 +46,8 @@ func pump(t *testing.T, m tea.Model, cmd tea.Cmd) tea.Model {
 		var msg tea.Msg
 		select {
 		case msg = <-ch:
-		case <-time.After(300 * time.Millisecond):
-			continue
+		case <-time.After(10 * time.Second):
+			t.Fatalf("a command did not return within 10s (a timer or listener not disabled in TestMain?)")
 		}
 		if batch, ok := msg.(tea.BatchMsg); ok {
 			queue = append(queue, batch...)

@@ -8,9 +8,29 @@ and adds named router profiles.
 ## Install
 
 ```sh
-make build            # → bin/fb
-# or: go install github.com/mkrajinovic/fbctl/cmd/fb@latest
+brew install --cask mkrajinov/tap/fb     # macOS (Apple silicon and Intel), Linux
+# or: go install github.com/mkrajinov/fritzbox/cmd/fb@latest
+# or from a checkout: make build          # → bin/fb
 ```
+
+Homebrew also installs bash, zsh and fish completions. The binaries are not signed by Apple; the
+cask removes the download quarantine flag so macOS runs them.
+
+## Releasing
+
+Push a version tag. The `release` workflow runs the tests, builds macOS and Linux archives with
+GoReleaser, creates the GitHub release and updates the cask in
+[mkrajinov/homebrew-tap](https://github.com/mkrajinov/homebrew-tap):
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+Dry run locally: `goreleaser release --snapshot --clean` (output in `dist/`).
+
+One-time setup: a public `mkrajinov/homebrew-tap` repository, and a repository secret
+`HOMEBREW_TAP_GITHUB_TOKEN` holding a fine-grained token with *Contents: read and write* on that
+repository only.
 
 ## Router setup
 

@@ -7,9 +7,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/skip2/go-qrcode"
 
-	"github.com/mkrajinovic/fbctl/internal/aha"
-	"github.com/mkrajinovic/fbctl/internal/fritz"
-	"github.com/mkrajinovic/fbctl/internal/ui"
+	"github.com/mkrajinov/fritzbox/internal/aha"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/ui"
 )
 
 // The selected row is a filled chip-coloured pill; no edge stripe or bar marker.

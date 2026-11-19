@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mkrajinovic/fbctl/internal/config"
-	"github.com/mkrajinovic/fbctl/internal/tr064"
+	"github.com/mkrajinov/fritzbox/internal/config"
+	"github.com/mkrajinov/fritzbox/internal/tr064"
 )
 
 // LogEvent is one entry of the box's event log.

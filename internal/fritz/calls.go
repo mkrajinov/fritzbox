@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mkrajinovic/fbctl/internal/tr064"
+	"github.com/mkrajinov/fritzbox/internal/tr064"
 )
 
 // Call types as used by the AVM call list.

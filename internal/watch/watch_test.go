@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mkrajinovic/fbctl/internal/callmon"
-	"github.com/mkrajinovic/fbctl/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/callmon"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
 )
 
 func kinds(evs []Event) []Kind {

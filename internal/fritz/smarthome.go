@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mkrajinovic/fbctl/internal/aha"
+	"github.com/mkrajinov/fritzbox/internal/aha"
 )
 
 // SmartDevices lists DECT/Zigbee smart home devices via the AHA interface.

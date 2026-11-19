@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mkrajinovic/fbctl/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
 )
 
 // DefaultAwayAfter is how long a device must stay inactive before it counts as gone.

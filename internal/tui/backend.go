@@ -4,8 +4,8 @@ package tui
 import (
 	"context"
 
-	"github.com/mkrajinovic/fbctl/internal/aha"
-	"github.com/mkrajinovic/fbctl/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/aha"
+	"github.com/mkrajinov/fritzbox/internal/fritz"
 )
 
 // Backend is what the TUI needs from a router. *fritz.Box implements it; tests use a fake.
