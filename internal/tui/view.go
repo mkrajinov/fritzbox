@@ -17,7 +17,6 @@ const rowIndent = "   "
 
 var (
 	selRow   = lipgloss.NewStyle().Background(ui.ColorChip).Bold(true)
-	hintKey  = lipgloss.NewStyle().Foreground(ui.ColorText).Bold(true)
 	modalBox = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color(ui.AccentTo)).Padding(1, 3)
 )
 
@@ -102,84 +101,6 @@ func (m Model) tabs() string {
 		}
 	}
 	return strings.Join(out, " ")
-}
-
-func (m Model) footer() string {
-	var hints []string
-	add := func(k, d string) { hints = append(hints, hintKey.Render(k)+" "+ui.Muted.Render(d)) }
-	add("tab", "switch")
-	if len(m.opt.Routers) > 1 {
-		add("[ ]", "router")
-	}
-	switch m.tab {
-	case tabOverview:
-		if len(m.opt.Routers) > 1 {
-			add("A", "all routers")
-		}
-		add("R", "reconnect")
-		add("B", "reboot")
-	case tabHosts:
-		add("/", "filter")
-		add("a", "active only")
-		add("s", "sort")
-		add("enter", "details")
-		add("n", "rename")
-		add("w", "wake")
-		add("b/u", "block/unblock")
-		add("p", "priority")
-		add("o", "auto wake")
-		add("f", "profile")
-		add("t", "ticket")
-	case tabWLAN:
-		add("space", "toggle")
-		add("c", "QR code")
-		add("p/P", "show/change password")
-		add("e", "SSID")
-		add("n", "channel")
-		add("H", "hide")
-		add("W", "WPS")
-		add("O", "all off/on")
-	case tabCalls:
-		add("f", "filter")
-		add("d", "days")
-		add("c", "call back")
-		add("x", "hang up")
-	case tabContacts:
-		add("/", "search")
-		if len(m.books) > 1 {
-			add("p", "next phonebook")
-		}
-		add("d", "dial")
-		add("x", "hang up")
-	case tabPhone:
-		add("space", "toggle / mark heard")
-		add("x", "delete / hang up")
-		add("c", "call back")
-	case tabSystem:
-		add("u", "check update")
-		add("I", "install")
-		add("a", "auto mode")
-		add("e", "DHCP range")
-		add("H/L/M", "https/LE/MyFRITZ")
-		add("b", "backup")
-	case tabHome:
-		add("space", "switch / off / run template")
-		add("+/-", "temp")
-	case tabLog:
-		add("g", "group")
-	}
-	add("r", "refresh")
-	add("?", "help")
-	add("q", "quit")
-	line := strings.Join(hints, "   ")
-	if m.flash != "" {
-		st := ui.Bad
-		if m.flashOK {
-			st = ui.OK
-		}
-		line = st.Render(m.flash) + "\n" + line
-	}
-	return line
 }
 
 func (m Model) body(w int) string {
