@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/mkrajinov/fritzbox/internal/capture"
+	"github.com/mkrajinov/fritzbox/internal/config"
 	"github.com/mkrajinov/fritzbox/internal/fritz"
 	"github.com/mkrajinov/fritzbox/internal/ui"
 )
@@ -39,7 +40,16 @@ func captureCmd(a *app) *cobra.Command {
 				// Many requests: allow more than one request timeout overall.
 				ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Minute)
 				defer cancel()
-				res, err := capture.Run(ctx, b.TR, dir, capture.NewScrubber(hideDevices), func(step string) {
+				scrub := capture.NewScrubber(hideDevices)
+				scrub.Literal(b.User)
+				if cfg, err := a.config(); err == nil {
+					if name, r, err := cfg.Resolve(a.routerName); err == nil {
+						if pw, err := config.Password(name, r); err == nil {
+							scrub.Literal(pw)
+						}
+					}
+				}
+				res, err := capture.Run(ctx, b.TR, dir, scrub, func(step string) {
 					if a.verbose {
 						fmt.Fprintln(a.err, ui.Muted.Render(step))
 					}

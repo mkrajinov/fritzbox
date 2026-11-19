@@ -43,7 +43,8 @@ func TestCLICapture(t *testing.T) {
 		return nil
 	})
 	for _, secret := range []string{fakebox.Password, "deadbeef", "01701234567", "01519876543", "030123456", "Alice", "Bob", "alice@example.com",
-		"AA:BB:CC:00:00:01", "laptop", "abc123.myfritz", "fbctl"} {
+		"AA:BB:CC:00:00:01", "laptop", "abc123.myfritz", "fbctl", "4930123456", "1112223", "fritzhome", "tok-9f8e7d6c", "ddnsuser",
+		"me@example.org", "ABC123", "000.044.000"} {
 		if i := strings.Index(all.String(), secret); i >= 0 {
 			t.Logf("context: %q", all.String()[max(0, i-80):min(len(all.String()), i+40)])
 			t.Errorf("capture contains %q", secret)

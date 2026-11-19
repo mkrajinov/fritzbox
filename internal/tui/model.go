@@ -788,6 +788,7 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := k.String()
 	if key == "ctrl+c" {
 		m.stopMonitor()
+		stopPlayback()
 		return m, tea.Quit
 	}
 	// Modal states first.
@@ -839,6 +840,7 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case "q":
 		m.stopMonitor()
+		stopPlayback()
 		return m, tea.Quit
 	case "?":
 		m.help = true

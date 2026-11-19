@@ -346,6 +346,8 @@ func defaultResponses() map[string]map[string]string {
 	return map[string]map[string]string{
 		"deviceinfo#GetInfo": {
 			"NewModelName": "FRITZ!Box 7590 AX", "NewSoftwareVersion": "8.02", "NewSerialNumber": "ABC123", "NewUpTime": "93784",
+			"NewProvisioningCode": "000.044.000.000",
+			"NewDeviceLog":        "12.11.26 14:06:00 Successful login of user fbctl at the FRITZ!Box user interface from IP address 192.168.178.20.\n12.11.26 14:05:30 Internet telephony with 4930123456@sip.example.net registered successfully. IP address: 203.0.113.9\n12.11.26 14:05:31 Missed call from 030 1112223.",
 		},
 		"userif#GetInfo": {"NewX_AVM-DE_Version": ""},
 		"layer3forwarding#GetDefaultConnectionService": {"NewDefaultConnectionService": "1.WANPPPConnection.1"},
@@ -393,7 +395,7 @@ func defaultResponses() map[string]map[string]string {
 		"lanhostcfg#GetInfo":                          {"NewDHCPServerEnable": "1", "NewMinAddress": "192.168.178.20", "NewMaxAddress": "192.168.178.200", "NewIPRouters": "192.168.178.1", "NewSubnetMask": "255.255.255.0", "NewDNSServers": "192.168.178.1", "NewDomainName": "fritz.box"},
 		"lanhostcfg#SetAddressRange":                  {},
 		"x_remote#GetInfo":                            {"NewEnabled": "0", "NewPort": "443", "NewUsername": "", "NewLetsEncryptEnabled": "1", "NewLetsEncryptState": "valid"},
-		"x_remote#GetDDNSInfo":                        {"NewEnabled": "0", "NewProviderName": "", "NewDomain": ""},
+		"x_remote#GetDDNSInfo":                        {"NewEnabled": "1", "NewProviderName": "DuckDNS", "NewDomain": "fritzhome.example-dyn.org", "NewUpdateURL": "https://www.duckdns.org/update?domains=fritzhome&token=tok-9f8e7d6c&ip=<ipaddr>", "NewUsername": "ddnsuser", "NewStatusIPv4": "updated"},
 		"x_remote#SetEnable":                          {"NewPort": "44321"},
 		"x_remote#SetLetsEncryptEnable":               {},
 		"x_myfritz#GetInfo":                           {"NewEnabled": "1", "NewDeviceRegistered": "1", "NewDynDNSName": "abc123.myfritz.net", "NewState": "ok", "NewEmail": "me@example.org"},
@@ -539,6 +541,9 @@ const deviceList = `<devicelist version="1" fwversion="8.02">
 const deviceLog = `<?xml version="1.0" encoding="utf-8"?>
 <root>
 <Event><id>1</id><group>net</group><date>12.11.26</date><time>14:05:00</time><msg>Internet connection established successfully. IP address: 203.0.113.7</msg></Event>
+<Event><id>3</id><group>sys</group><date>12.11.26</date><time>14:06:00</time><msg>Successful login of user fbctl at the FRITZ!Box user interface from IP address 192.168.178.20.</msg></Event>
+<Event><id>4</id><group>fon</group><date>12.11.26</date><time>14:05:30</time><msg>Internet telephony with 4930123456@sip.example.net registered successfully.</msg></Event>
+<Event><id>5</id><group>fon</group><date>12.11.26</date><time>14:05:31</time><msg>Missed call from 030 1112223.</msg></Event>
 <Event><id>2</id><group>wlan</group><date>12.11.26</date><time>13:00:12</time><msg>WLAN device logged on (5 GHz), 866 Mbit/s, laptop, IP 192.168.178.20</msg></Event>
 </root>`
 

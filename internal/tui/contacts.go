@@ -2,9 +2,11 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -139,7 +141,23 @@ func (m *Model) askBlock(c fritz.Call) {
 	}
 }
 
-// playMessage downloads a voicemail, plays it and marks it heard.
+// Playback runs in its own process; quitting the TUI stops it.
+var (
+	playMu     sync.Mutex
+	playCancel context.CancelFunc
+)
+
+func stopPlayback() {
+	playMu.Lock()
+	defer playMu.Unlock()
+	if playCancel != nil {
+		playCancel()
+		playCancel = nil
+	}
+}
+
+// playMessage downloads a voicemail, plays it and marks it heard. A new message stops the one
+// still playing.
 func (m *Model) playMessage(msg fritz.Message) tea.Cmd {
 	b, gen := m.backend, m.gen
 	from := firstNonEmptyStr(msg.Name, msg.Number, "unknown caller")
@@ -149,9 +167,16 @@ func (m *Model) playMessage(msg fritz.Message) tea.Cmd {
 		rec, err := b.Recording(c, msg.TAM, msg.Index)
 		cancel()
 		if err == nil {
+			stopPlayback()
 			pctx, pcancel := context.WithTimeout(context.Background(), 15*time.Minute)
+			playMu.Lock()
+			playCancel = pcancel
+			playMu.Unlock()
 			err = player.PlayBytes(pctx, rec.Data, rec.Ext)
 			pcancel()
+			if errors.Is(err, context.Canceled) {
+				return actionMsg{gen: gen, text: "playback stopped", refresh: tabPhone}
+			}
 		}
 		if err == nil && msg.New {
 			c, cancel := ctx()

@@ -234,7 +234,7 @@ func TestDeviceLogRenameAndWLANPassword(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(evs) != 2 || evs[0].Group != "net" || evs[0].Time.Hour() != 14 || !strings.Contains(evs[1].Msg, "laptop") {
+	if len(evs) != 5 || evs[0].Group != "net" || evs[0].Time.Hour() != 14 || !strings.Contains(evs[4].Msg, "laptop") {
 		t.Fatalf("log: %+v", evs)
 	}
 	if c := fb.CallsTo("http", "devicelog"); len(c) != 1 || !strings.Contains(c[0].Body, "filter=wlan") {

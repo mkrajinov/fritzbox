@@ -247,7 +247,7 @@ func TestMeshAndLogTabs(t *testing.T) {
 	}
 	m = press(t, m, "9")
 	v = plain(m.View())
-	if !strings.Contains(v, "Event log · all · 2 events") || !strings.Contains(v, "Internet connection established") {
+	if !strings.Contains(v, "Event log · all · 5 events") || !strings.Contains(v, "Internet connection established") {
 		t.Fatalf("log:\n%s", v)
 	}
 }

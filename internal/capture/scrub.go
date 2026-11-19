@@ -14,6 +14,8 @@ import (
 type Scrubber struct {
 	HideDeviceNames bool
 
+	literals []string // values replaced everywhere (login user, password)
+
 	maps     map[string]map[string]string // kind → original → placeholder
 	counters map[string]int
 }
@@ -46,13 +48,24 @@ var (
 	emailRe = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`)
 	uuidRe  = regexp.MustCompile(`(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b`)
 	fqdnRe  = regexp.MustCompile(`(?i)\b[a-z0-9-]+\.(?:myfritz\.net|dyndns\.org|duckdns\.org|ddns\.net|no-ip\.[a-z]+)\b`)
-	// Long digit runs in free text (the event log): phone numbers.
-	phoneTextRe = regexp.MustCompile(`(?:\+|\b0)\d[\d ]{5,}\d\b`)
+	// Phone numbers in free text (the event log): 0… or +… with spaces, or any run of 7+ digits
+	// (SIP registrations such as 4930123456@…).
+	phoneTextRe = regexp.MustCompile(`(?:\+|\b0)\d[\d ]{5,}\d\b|\b\d{7,}\b`)
 )
+
+// Literal registers a value (e.g. the login user or password) that is replaced in all output.
+func (s *Scrubber) Literal(v string) {
+	if len(strings.TrimSpace(v)) >= 3 {
+		s.literals = append(s.literals, v)
+	}
+}
 
 // Text scrubs identifiers that can appear anywhere: session IDs, MAC, IP and email addresses,
 // UUIDs and DynDNS/MyFRITZ names. Private IPv4 addresses are kept (they help reading the data).
 func (s *Scrubber) Text(t string) string {
+	for _, l := range s.literals {
+		t = strings.ReplaceAll(t, l, "REDACTED")
+	}
 	t = sidRe.ReplaceAllString(t, "${1}0000000000000000")
 	t = macRe.ReplaceAllStringFunc(t, func(m string) string {
 		return s.alias("mac", strings.ToUpper(m), func(n int) string { return fmt.Sprintf("02:00:00:00:%02X:%02X", n>>8, n&0xff) })
@@ -260,8 +273,12 @@ func (s *Scrubber) Value(key, v string) string {
 		return v
 	case secretKey(key):
 		return "REDACTED"
-	case strings.Contains(l, "serialnumber"), strings.Contains(l, "username") && l != "newx_avm-de_userlist":
+	case strings.Contains(l, "serialnumber"), strings.Contains(l, "username"), l == "newprovisioningcode",
+		l == "newdomain", l == "newupdateurl", l == "newdyndnsname", l == "newemail":
 		return "REDACTED"
+	case l == "newdevicelog":
+		// The whole event log; docs/devicelog.xml holds the scrubbed version.
+		return s.Known(s.Text(v))
 	case l == "newssid":
 		return s.SSID(v)
 	case strings.Contains(l, "phonenumber") || l == "newphonenumbers":

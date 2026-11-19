@@ -116,7 +116,11 @@ func serviceCmd(a *app) *cobra.Command {
 			if m.GOOS == "linux" {
 				fmt.Fprintln(a.out, ui.Muted.Render("  to keep it running while you are logged out: loginctl enable-linger $USER"))
 			}
-			fmt.Fprintf(a.out, "check it with: fb service status %s · fb service logs %s\n", s.Job, s.Job)
+			sel := ""
+			if s.Router != "" {
+				sel = "-r " + s.Router + " "
+			}
+			fmt.Fprintf(a.out, "check it with: fb %sservice status %s · fb %sservice logs %s\n", sel, s.Job, sel, s.Job)
 			return nil
 		},
 	}
