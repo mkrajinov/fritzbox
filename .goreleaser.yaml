@@ -62,4 +62,8 @@ brews:
     repository:
       owner: mkrajinov
       name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+      branch: main
+      # Pushed over SSH with a deploy key that can write to homebrew-tap only.
+      git:
+        url: git@github.com:mkrajinov/homebrew-tap.git
+        private_key: "{{ .Env.HOMEBREW_TAP_SSH_KEY }}"

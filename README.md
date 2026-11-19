@@ -30,9 +30,15 @@ git tag v0.1.0 && git push origin v0.1.0
 
 Dry run locally: `goreleaser release --snapshot --clean` (output in `dist/`).
 
-One-time setup: a public `mkrajinov/homebrew-tap` repository, and a repository secret
-`HOMEBREW_TAP_GITHUB_TOKEN` holding a fine-grained token with *Contents: read and write* on that
-repository only.
+One-time setup: a public `mkrajinov/homebrew-tap` repository with a write deploy key, and the
+key's private half as the repository secret `HOMEBREW_TAP_SSH_KEY` in this repository. To replace it:
+
+```sh
+ssh-keygen -t ed25519 -N "" -C "fritzbox release" -f tapkey
+gh repo deploy-key add tapkey.pub -R mkrajinov/homebrew-tap --allow-write -t "fritzbox release"
+gh secret set HOMEBREW_TAP_SSH_KEY -R mkrajinov/fritzbox < tapkey
+rm tapkey tapkey.pub
+```
 
 ## Router setup
 
