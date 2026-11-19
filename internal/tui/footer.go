@@ -74,13 +74,17 @@ func (m Model) hints() []hint {
 		add("f", "filter")
 		add("d", "days")
 		add("c", "call back")
+		add("b", "block caller")
 		add("x", "hang up")
 	case tabContacts:
 		add("/", "search")
+		add("d", "dial")
+		add("n", "new")
+		add("e", "edit")
+		danger("X", "delete")
 		if len(m.books) > 1 {
 			add("p", "next phonebook")
 		}
-		add("d", "dial")
 		add("x", "hang up")
 	case tabPhone:
 		add("space", "toggle / mark heard")

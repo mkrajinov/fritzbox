@@ -81,7 +81,13 @@ fb wlan qr guest [--show-password] [--png f]   join QR code
 fb wlan password guest [--generate 16|--set PW] show or rotate a WLAN password
 fb calls [--missed|--in|--out] [--days N]
 fb calls monitor                               live RING/CALL/CONNECT/DISCONNECT events
-fb phonebook list | show <id> [--search x]
+fb calls block <number> [--name X] | unblock <number> | blocked   call block list
+fb phonebook list | show <book> [--search x]
+fb phonebook add <book> --name X --number mobile:0170… [--number …] [--email …] [--vip]
+fb phonebook edit <book> <contact> [--name|--number|--email|--vip]   changes only the given fields
+fb phonebook delete <book> <contact> [--yes]
+fb phonebook import <book> file.vcf|file.csv [--dry-run]   skips contacts that already exist
+fb phonebook export <book> [-o file.vcf|.csv|.json]
 fb home list | switch <ain|name> on|off|toggle | temp <ain|name> <°C|off|on>
 fb hosts info <host>                           model, profile, online time, priority, auto wake
 fb hosts priority|autowake <host> on|off
@@ -125,8 +131,10 @@ Tabs: Overview · Hosts · Mesh · WLAN · Calls · Contacts · Phone · Smart H
   `o` auto wake, `f` next access profile (confirms), `t` online-time ticket.
 - WLAN: `space` toggle, `c` QR code, `p`/`P` show/change password, `e` SSID, `n` channel, `H` hide SSID,
   `W` WPS, `O` all WLANs off/on. Changes that drop devices confirm first.
-- Calls: `f` all/missed/in/out, `d` 30/90/all/7 days, `c` call back, `x` hang up. Live monitor on top.
-- Contacts: `/` search, `p` next phonebook, `d` dial, `x` hang up.
+- Calls: `f` all/missed/in/out, `d` 30/90/all/7 days, `c` call back, `b` block the caller (confirms),
+  `x` hang up. Live monitor on top.
+- Contacts: `/` search, `d` dial, `n` new contact, `e` edit name and numbers, `X` delete (confirms),
+  `p` next phonebook, `x` hang up.
 - Phone: answering machines, messages and forwarding rules in one list. `space` switches a machine or
   rule, or marks a message heard/new; `x` deletes a message (confirms); `c` calls back.
 - Smart Home: `space` switch (thermostat: off ↔ 20 °C) or run a template, `+`/`-` thermostat.
@@ -236,6 +244,9 @@ check on live hardware (capture with `fb -v raw call …`, scrub secrets, add to
   of `X_AVM-DE_SignalStrength` (shown as 0–100). Check with
   `fb -v raw call WLANConfiguration1 X_AVM-DE_GetWLANDeviceListPath` and open the returned path
 - the absolute URL `X_AVM-DE_GetConfigFile` returns (fb rewrites the host to the configured address)
+- the entry XML of `GetPhonebookEntryUID` (fb edits it as an XML tree and keeps unknown elements) and
+  the error code online phonebooks return on writes; the call block list download
+  (`GetCallBarringList`, assumed to use the phonebook format)
 
 Action and argument names for all new features were checked against the SCPD files of a FRITZ!Box
 5590 Fiber (FRITZ!OS 8.25).

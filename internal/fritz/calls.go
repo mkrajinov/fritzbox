@@ -142,10 +142,13 @@ type Number struct {
 	Number string `json:"number"`
 }
 
-// Contact is a phonebook entry.
+// Contact is a phonebook entry. ID is the entry's uniqueid, stable across edits.
 type Contact struct {
+	ID      int      `json:"id"`
 	Name    string   `json:"name"`
 	Numbers []Number `json:"numbers"`
+	Emails  []string `json:"emails,omitempty"`
+	VIP     bool     `json:"vip,omitempty"`
 }
 
 // Phonebooks lists phonebooks.
@@ -180,14 +183,32 @@ func (b *Box) phonebook(ctx context.Context, id int) (Phonebook, error) {
 	return Phonebook{ID: id, Name: r["NewPhonebookName"], url: r["NewPhonebookURL"]}, nil
 }
 
+type contactXML struct {
+	ID       string `xml:"uniqueid"`
+	Category string `xml:"category"`
+	Name     string `xml:"person>realName"`
+	Numbers  []struct {
+		Type   string `xml:"type,attr"`
+		Number string `xml:",chardata"`
+	} `xml:"telephony>number"`
+	Emails []string `xml:"telephony>services>email"`
+}
+
+func (c contactXML) contact() Contact {
+	ct := Contact{ID: atoi(c.ID), Name: c.Name, VIP: strings.TrimSpace(c.Category) == "1"}
+	for _, n := range c.Numbers {
+		ct.Numbers = append(ct.Numbers, Number{Type: n.Type, Number: strings.TrimSpace(n.Number)})
+	}
+	for _, e := range c.Emails {
+		if e = strings.TrimSpace(e); e != "" {
+			ct.Emails = append(ct.Emails, e)
+		}
+	}
+	return ct
+}
+
 type phonebookXML struct {
-	Contacts []struct {
-		Name    string `xml:"person>realName"`
-		Numbers []struct {
-			Type   string `xml:"type,attr"`
-			Number string `xml:",chardata"`
-		} `xml:"telephony>number"`
-	} `xml:"phonebook>contact"`
+	Contacts []contactXML `xml:"phonebook>contact"`
 }
 
 // ParsePhonebook parses a phonebook XML export.
@@ -198,11 +219,7 @@ func ParsePhonebook(data []byte) ([]Contact, error) {
 	}
 	out := make([]Contact, 0, len(p.Contacts))
 	for _, c := range p.Contacts {
-		ct := Contact{Name: c.Name}
-		for _, n := range c.Numbers {
-			ct.Numbers = append(ct.Numbers, Number{Type: n.Type, Number: strings.TrimSpace(n.Number)})
-		}
-		out = append(out, ct)
+		out = append(out, c.contact())
 	}
 	return out, nil
 }

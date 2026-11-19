@@ -32,6 +32,10 @@ type Backend interface {
 	SetWLANPassword(ctx context.Context, index int, password string) error
 	Phonebooks(ctx context.Context) ([]fritz.Phonebook, error)
 	Contacts(ctx context.Context, id int) (fritz.Phonebook, []fritz.Contact, error)
+	AddContact(ctx context.Context, book int, c fritz.Contact) (int, error)
+	UpdateContact(ctx context.Context, book, id int, e fritz.ContactEdit) (fritz.Contact, error)
+	DeleteContact(ctx context.Context, book, id int) error
+	BlockNumber(ctx context.Context, number, name string) (id int, added bool, err error)
 
 	SetSecondFactorHandler(f func(fritz.SecondFactorPrompt))
 

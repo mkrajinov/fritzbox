@@ -46,6 +46,9 @@ type Box struct {
 	Target    int                          // thermostat target
 	Blocked   map[string]bool              // IP → internet blocked (X_AVM-DE_HostFilter)
 	HostList  string                       // overrides the default host list XML when set
+	Books     map[int]*Book                // phonebooks by id
+	Barring   []string                     // call block list entries (<contact> XML)
+	nextUID   int
 
 	// Second factor (X_AVM-DE_Auth): actions in NeedsToken fail with 866 unless they carry
 	// AuthToken in the SOAP header after the user "confirmed". ConfirmAfter is the number of
@@ -61,7 +64,7 @@ const AuthToken = "2C0A2110-0000-4000-8000-FAKE00000001"
 
 // New starts the fake box.
 func New() *Box {
-	b := &Box{Responses: defaultResponses(), Faults: map[string]int{}, Plug: "1", Target: 42, Blocked: map[string]bool{}, NeedsToken: map[string]bool{}}
+	b := &Box{Responses: defaultResponses(), Faults: map[string]int{}, Plug: "1", Target: 42, Blocked: map[string]bool{}, NeedsToken: map[string]bool{}, Books: defaultBooks(), nextUID: 100}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/tr64desc.xml", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, desc) })
 	mux.HandleFunc("/upnp/control/", func(w http.ResponseWriter, r *http.Request) {
@@ -93,7 +96,8 @@ func New() *Box {
 	})
 	mux.HandleFunc("/backup.export", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, BackupData) })
 	mux.HandleFunc("/tamcalls.xml", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, tamMessages) })
-	mux.HandleFunc("/phonebook.lua", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, phonebook) })
+	mux.HandleFunc("/phonebook.lua", b.servePhonebook)
+	mux.HandleFunc("/callbarring.lua", b.serveBarring)
 	mux.HandleFunc("/login_sid.lua", b.login)
 	mux.HandleFunc("/webservices/homeautoswitch.lua", b.homeauto)
 	b.Server = httptest.NewServer(mux)
@@ -185,6 +189,16 @@ func (b *Box) soap(w http.ResponseWriter, r *http.Request) {
 	}
 	if svc == "x_auth" {
 		b.authAction(action, string(body))
+	}
+	if svc == "x_contact" {
+		if out, code, ok := b.contactAction(action, string(body)); ok {
+			if code != 0 {
+				b.Faults[key] = code
+			} else {
+				delete(b.Faults, key)
+				b.Responses[key] = out
+			}
+		}
 	}
 	code, fault := b.Faults[key]
 	if b.NeedsToken[key] && (between(string(body), `s:mustUnderstand="1">`, "</avm:token>") != AuthToken || b.AuthState != "authenticated") {
@@ -351,8 +365,6 @@ func defaultResponses() map[string]map[string]string {
 		"wlanconfig3#SetEnable":                       {},
 		"wlanconfig3#GetSecurityKeys":                 {"NewKeyPassphrase": "guest;pass"},
 		"x_contact#GetCallList":                       {"NewCallListURL": "/calllist.lua?sid=deadbeef"},
-		"x_contact#GetPhonebookList":                  {"NewPhonebookList": "0,1"},
-		"x_contact#GetPhonebook":                      {"NewPhonebookName": "Telefonbuch", "NewPhonebookURL": "/phonebook.lua?sid=deadbeef&pbid=0"},
 		"userif#X_AVM-DE_GetInfo":                     {"NewX_AVM-DE_AutoUpdateMode": "important", "NewX_AVM-DE_CurrentFwVersion": "154.08.02", "NewX_AVM-DE_UpdateSuccessful": "succeeded"},
 		"userif#X_AVM-DE_CheckUpdate":                 {},
 		"userif#X_AVM-DE_DoUpdate":                    {"NewUpgradeAvailable": "1", "NewX_AVM-DE_UpdateState": "Started"},
@@ -497,12 +509,6 @@ const callList = `<?xml version="1.0" encoding="UTF-8"?>
 <Call><Id>2</Id><Type>3</Type><Caller>SIP: 030123456</Caller><CallerNumber>030123456</CallerNumber><Called>0891234</Called><Name></Name><Numbertype>sip</Numbertype><Device>Kitchen</Device><Port>10</Port><Date>11.11.26 09:15</Date><Duration>0:12</Duration><Count></Count><Path /></Call>
 <Call><Id>1</Id><Type>1</Type><Caller>01519876543</Caller><Called>SIP: 030123456</Called><CalledNumber>030123456</CalledNumber><Name>Bob</Name><Numbertype>sip</Numbertype><Device>Kitchen</Device><Port>10</Port><Date>10.11.26 18:40</Date><Duration>1:05</Duration><Count></Count><Path /></Call>
 </root>`
-
-const phonebook = `<?xml version="1.0" encoding="utf-8"?>
-<phonebooks><phonebook name="Telefonbuch">
-<contact><category>0</category><person><realName>Alice</realName></person><telephony nid="2"><number type="mobile" prio="1" id="0">01701234567</number><number type="home" prio="0" id="1">030111222</number></telephony><uniqueid>1</uniqueid></contact>
-<contact><category>0</category><person><realName>Bob</realName></person><telephony nid="1"><number type="work" prio="1" id="0">01519876543</number></telephony><uniqueid>2</uniqueid></contact>
-</phonebook></phonebooks>`
 
 // deviceList: %s = plug state, %d = thermostat target.
 const deviceList = `<devicelist version="1" fwversion="8.02">

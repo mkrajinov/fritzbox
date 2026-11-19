@@ -74,6 +74,7 @@ func callsCmd(a *app) *cobra.Command {
 	f.BoolVar(&in, "in", false, "only received calls")
 	f.BoolVar(&out, "out", false, "only outgoing calls")
 	cmd.AddCommand(monitorCmd(a))
+	cmd.AddCommand(blockCmds(a)...)
 	return cmd
 }
 
@@ -129,7 +130,7 @@ func formatEvent(e callmon.Event) string {
 }
 
 func phonebookCmd(a *app) *cobra.Command {
-	cmd := &cobra.Command{Use: "phonebook", Aliases: []string{"pb"}, Short: "List phonebooks and contacts"}
+	cmd := &cobra.Command{Use: "phonebook", Aliases: []string{"pb"}, Short: "List, edit, import and export phonebooks"}
 	cmd.AddCommand(&cobra.Command{
 		Use: "list", Aliases: []string{"ls"}, Short: "List phonebooks",
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -156,19 +157,19 @@ func phonebookCmd(a *app) *cobra.Command {
 	})
 	var search string
 	show := &cobra.Command{
-		Use: "show <id>", Short: "Show contacts of a phonebook", Args: cobra.ExactArgs(1),
+		Use: "show <phonebook>", Short: "Show contacts of a phonebook (by id or name)", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := strconv.Atoi(args[0])
-			if err != nil {
-				return fmt.Errorf("phonebook id must be a number (see `fb phonebook list`)")
-			}
 			ctx, cancel := a.ctx(cmd)
 			defer cancel()
 			b, err := a.box(ctx)
 			if err != nil {
 				return err
 			}
-			_, contacts, err := b.Contacts(ctx, id)
+			pb, err := resolveBook(ctx, b, args[0])
+			if err != nil {
+				return err
+			}
+			_, contacts, err := b.Contacts(ctx, pb.ID)
 			if err != nil {
 				return err
 			}
@@ -196,14 +197,21 @@ func phonebookCmd(a *app) *cobra.Command {
 					if i > 0 {
 						name = ""
 					}
-					rows = append(rows, []string{name, n.Number, ui.Muted.Render(n.Type)})
+					id := strconv.Itoa(c.ID)
+					if i > 0 {
+						id = ""
+					} else if c.VIP {
+						name += ui.Warn.Render(" ★")
+					}
+					rows = append(rows, []string{id, name, n.Number, ui.Muted.Render(n.Type)})
 				}
 			}
-			a.printTable([]string{"NAME", "NUMBER", "TYPE"}, rows)
+			a.printTable([]string{"ID", "NAME", "NUMBER", "TYPE"}, rows)
 			return nil
 		},
 	}
 	show.Flags().StringVarP(&search, "search", "s", "", "filter by name or number")
 	cmd.AddCommand(show)
+	cmd.AddCommand(phonebookEditCmds(a)...)
 	return cmd
 }

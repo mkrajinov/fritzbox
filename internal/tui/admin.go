@@ -384,9 +384,17 @@ func (m Model) adminKey(key string) (Model, tea.Cmd, bool) {
 			return m, nil, true
 		case "x":
 			return m, m.hangup(), true
+		case "b":
+			if cur < len(calls) {
+				m.askBlock(calls[cur])
+			}
+			return m, nil, true
 		}
 	case tabContacts:
 		cs := m.visibleContacts()
+		if mm, cmd, ok := m.contactKey(key, cs, cur); ok {
+			return mm, cmd, true
+		}
 		switch key {
 		case "d":
 			if cur < len(cs) && len(cs[cur].Numbers) > 0 {

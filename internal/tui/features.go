@@ -47,7 +47,9 @@ func (m Model) inputKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			in.hint = ui.Bad.Render(err.Error())
 			return m, nil
 		}
-		m.input = nil
+		if m.input == in { // a multi-step form may have opened its next step
+			m.input = nil
+		}
 		return m, cmd
 	}
 	var cmd tea.Cmd

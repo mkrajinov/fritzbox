@@ -54,6 +54,8 @@ Legend: ✅ implemented in fb · ○ documented, not implemented · ✗ not avai
 | Capability | Status | Interface |
 |---|---|---|
 | Call list, phonebooks, call monitor | ✅ | `X_AVM-DE_OnTel:1`, TCP 1012 |
+| Edit contacts, vCard/CSV import and export | ✅ `fb phonebook add/edit/delete/import/export`, TUI Contacts `n`/`e`/`X` | `X_AVM-DE_OnTel:1` `GetPhonebookEntryUID`, `SetPhonebookEntryUID`, `DeletePhonebookEntryUID`. Online phonebooks are read-only. |
+| Call block list | ✅ `fb calls block/unblock/blocked`, TUI Calls `b` | `X_AVM-DE_OnTel:1` `GetCallBarringList`, `GetCallBarringEntryByNum`, `SetCallBarringEntry`, `DeleteCallBarringEntryUID` |
 | Answering machine: list, mark, delete, on/off | ✅ `fb tam`, TUI Phone tab (playback: ○) | `X_AVM-DE_TAM:1` `GetMessageList`, `MarkMessage`, `DeleteMessage` |
 | Call deflection on/off | ✅ `fb forward`, TUI Phone tab | `X_AVM-DE_OnTel:1` `GetDeflections`, `SetDeflectionEnable` (no create action) |
 | Dial, hang up | ✅ `fb dial/hangup`, TUI `c`/`d`/`x` | `X_VoIP:1` `X_AVM-DE_DialNumber`, `X_AVM-DE_DialHangup` |
