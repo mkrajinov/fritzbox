@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/mkrajinov/fritzbox/internal/fritz"
+	"github.com/mkrajinov/fritzbox/internal/player"
 )
 
 // formatNumbers renders numbers as the editable "type:number, …" list.
@@ -134,5 +136,28 @@ func (m *Model) askBlock(c fritz.Call) {
 			}
 			return err
 		}),
+	}
+}
+
+// playMessage downloads a voicemail, plays it and marks it heard.
+func (m *Model) playMessage(msg fritz.Message) tea.Cmd {
+	b, gen := m.backend, m.gen
+	from := firstNonEmptyStr(msg.Name, msg.Number, "unknown caller")
+	m.flash, m.flashOK = "playing the message from "+from+"…", true
+	return func() tea.Msg {
+		c, cancel := ctx()
+		rec, err := b.Recording(c, msg.TAM, msg.Index)
+		cancel()
+		if err == nil {
+			pctx, pcancel := context.WithTimeout(context.Background(), 15*time.Minute)
+			err = player.PlayBytes(pctx, rec.Data, rec.Ext)
+			pcancel()
+		}
+		if err == nil && msg.New {
+			c, cancel := ctx()
+			err = b.MarkMessage(c, msg.TAM, msg.Index, true)
+			cancel()
+		}
+		return actionMsg{gen: gen, text: "played the message from " + from, err: err, refresh: tabPhone}
 	}
 }

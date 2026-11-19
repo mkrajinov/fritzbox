@@ -98,6 +98,7 @@ fb wlan all on|off                             all radios, like the WLAN button
 fb wlan set <wlan> [--ssid X] [--channel N|auto] [--hidden true|false]
 fb wlan clients [--sort wlan|signal|name]      Wi-Fi devices: signal, TX/RX rate, band (box radios only)
 fb tam [machines | mark <t:i> | delete <t:i> | switch <t> on|off]   answering machine
+fb tam play <t:i> [-o file.wav] [--keep-new]   play a message (afplay, paplay/aplay/ffplay/mpv, $FB_PLAYER)
 fb forward [on|off <id>]                       call forwarding rules (created in the web UI)
 fb dial <number|contact> [--phone NAME] | fb hangup   dialing help: rings your phone, then calls
 fb home templates | apply <template>           smart home templates (e.g. guest WLAN on)
@@ -135,8 +136,8 @@ Tabs: Overview · Hosts · Mesh · WLAN · Calls · Contacts · Phone · Smart H
   `x` hang up. Live monitor on top.
 - Contacts: `/` search, `d` dial, `n` new contact, `e` edit name and numbers, `X` delete (confirms),
   `p` next phonebook, `x` hang up.
-- Phone: answering machines, messages and forwarding rules in one list. `space` switches a machine or
-  rule, or marks a message heard/new; `x` deletes a message (confirms); `c` calls back.
+- Phone: answering machines, messages and forwarding rules in one list. `p` plays a message and marks
+  it heard; `space` switches a machine or rule, or marks a message heard/new; `x` deletes a message (confirms); `c` calls back.
 - Smart Home: `space` switch (thermostat: off ↔ 20 °C) or run a template, `+`/`-` thermostat.
 - Log: `g` cycle all/sys/net/fon/wlan/usb.
 - System: firmware `u` check, `I` install, `a` auto mode; `e` DHCP range; `H`/`L`/`M` remote HTTPS,
@@ -247,6 +248,8 @@ check on live hardware (capture with `fb -v raw call …`, scrub secrets, add to
 - the entry XML of `GetPhonebookEntryUID` (fb edits it as an XML tree and keeps unknown elements) and
   the error code online phonebooks return on writes; the call block list download
   (`GetCallBarringList`, assumed to use the phonebook format)
+- voicemail download: `/download.lua?path=<Path>&sid=<sid of the message list URL>` on the server of the
+  message list URL, and the audio format (fb checks for a WAV header and otherwise saves `.bin`)
 
 Action and argument names for all new features were checked against the SCPD files of a FRITZ!Box
 5590 Fiber (FRITZ!OS 8.25).

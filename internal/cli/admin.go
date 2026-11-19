@@ -459,7 +459,7 @@ func tamCmd(a *app) *cobra.Command {
 			return a.run(cmd, func(ctx context.Context, b *fritz.Box) error { return b.SetTAM(ctx, idx, on) })
 		},
 	}
-	cmd.AddCommand(mark, del, list, set)
+	cmd.AddCommand(mark, del, list, set, tamPlayCmd(a))
 	return cmd
 }
 

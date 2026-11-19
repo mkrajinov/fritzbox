@@ -87,6 +87,7 @@ func (m Model) hints() []hint {
 		}
 		add("x", "hang up")
 	case tabPhone:
+		add("p", "play message")
 		add("space", "toggle / mark heard")
 		danger("x", "delete / hang up")
 		add("c", "call back")

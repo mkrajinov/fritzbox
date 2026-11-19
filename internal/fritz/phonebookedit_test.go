@@ -156,3 +156,21 @@ func TestVCardAndCSV(t *testing.T) {
 		t.Error("HasContact should match name case-insensitively and numbers normalized")
 	}
 }
+
+func TestRecordingDownload(t *testing.T) {
+	b, fb := connect(t, fakebox.User, fakebox.Password)
+	ctx := context.Background()
+	for _, idx := range []int{0, 1} { // message 0 has a bare path, message 1 a download.lua path
+		rec, err := b.Recording(ctx, 0, idx)
+		if err != nil || rec.Ext != ".wav" || string(rec.Data) != fakebox.Recording || rec.Message.Index != idx {
+			t.Fatalf("recording %d: %+v %v", idx, rec.Message, err)
+		}
+	}
+	dl := fb.CallsTo("http", "download")
+	if len(dl) != 2 || !strings.Contains(dl[0].Body, "path=%2Fdata%2Ftam%2Frec%2Frec.0.000") || !strings.Contains(dl[0].Body, "sid=deadbeef") {
+		t.Fatalf("download requests: %+v", dl)
+	}
+	if _, err := b.Recording(ctx, 0, 7); err == nil || !strings.Contains(err.Error(), "no message 7") {
+		t.Errorf("missing message: %v", err)
+	}
+}

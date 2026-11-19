@@ -58,6 +58,7 @@ type Backend interface {
 	Messages(ctx context.Context) ([]fritz.Message, error)
 	MarkMessage(ctx context.Context, tam, index int, read bool) error
 	DeleteMessage(ctx context.Context, tam, index int) error
+	Recording(ctx context.Context, tam, index int) (fritz.Recording, error)
 	Deflections(ctx context.Context) ([]fritz.Deflection, error)
 	SetDeflection(ctx context.Context, id int, on bool) error
 	Dial(ctx context.Context, number string) error

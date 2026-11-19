@@ -399,7 +399,7 @@ func helpText() string {
 		"           W WPS push button · O all WLANs off/on",
 		"Calls      f all/missed/in/out · d 30/90/all/7 days · c call back · b block caller · x hang up",
 		"Contacts   / search · d dial · n new · e edit · X delete · p next phonebook · x hang up",
-		"Phone      space answering machine on/off, mark message heard, forwarding on/off · x delete · c call back",
+		"Phone      p play message · space answering machine on/off, mark message heard, forwarding on/off · x delete · c call back",
 		"Smart Home space switch (thermostat: off ↔ 20 °C) or run template · + / - target temperature",
 		"Log        g all/sys/net/fon/wlan/usb",
 		"System     u check firmware · I install · a auto update · e DHCP range · H/L/M remote HTTPS, Let's Encrypt, MyFRITZ · b backup",

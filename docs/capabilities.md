@@ -56,7 +56,7 @@ Legend: ✅ implemented in fb · ○ documented, not implemented · ✗ not avai
 | Call list, phonebooks, call monitor | ✅ | `X_AVM-DE_OnTel:1`, TCP 1012 |
 | Edit contacts, vCard/CSV import and export | ✅ `fb phonebook add/edit/delete/import/export`, TUI Contacts `n`/`e`/`X` | `X_AVM-DE_OnTel:1` `GetPhonebookEntryUID`, `SetPhonebookEntryUID`, `DeletePhonebookEntryUID`. Online phonebooks are read-only. |
 | Call block list | ✅ `fb calls block/unblock/blocked`, TUI Calls `b` | `X_AVM-DE_OnTel:1` `GetCallBarringList`, `GetCallBarringEntryByNum`, `SetCallBarringEntry`, `DeleteCallBarringEntryUID` |
-| Answering machine: list, mark, delete, on/off | ✅ `fb tam`, TUI Phone tab (playback: ○) | `X_AVM-DE_TAM:1` `GetMessageList`, `MarkMessage`, `DeleteMessage` |
+| Answering machine: list, mark, delete, on/off, play | ✅ `fb tam`, `fb tam play`, TUI Phone tab `p` | `X_AVM-DE_TAM:1` `GetMessageList`, `MarkMessage`, `DeleteMessage`; recordings via `/download.lua?path=…&sid=…` |
 | Call deflection on/off | ✅ `fb forward`, TUI Phone tab | `X_AVM-DE_OnTel:1` `GetDeflections`, `SetDeflectionEnable` (no create action) |
 | Dial, hang up | ✅ `fb dial/hangup`, TUI `c`/`d`/`x` | `X_VoIP:1` `X_AVM-DE_DialNumber`, `X_AVM-DE_DialHangup` |
 | DECT handsets | ○ | `X_AVM-DE_Dect:1` |

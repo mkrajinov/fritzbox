@@ -465,6 +465,12 @@ func (m Model) phoneKey(key string, cur int) (Model, tea.Cmd, bool) {
 			m.askDial(msg.Number, orDash(firstNonEmptyStr(msg.Name, msg.Number)))
 		}
 		return m, nil, true
+	case "p":
+		if kind == "msg" {
+			cmd := m.playMessage(m.msgs[i])
+			return m, cmd, true
+		}
+		return m, nil, true
 	case " ", "enter":
 		switch kind {
 		case "tam":

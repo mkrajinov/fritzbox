@@ -93,3 +93,23 @@ func TestBlockCaller(t *testing.T) {
 		t.Errorf("SetCallBarringEntry calls: %d", n)
 	}
 }
+
+func TestPlayVoicemail(t *testing.T) {
+	t.Setenv("FB_PLAYER", "true")
+	m, fb := setup(t)
+	m = press(t, m, "7", "j", "j", "p") // rows: tam, msg(0301112223), msg(Alice, new)
+	if v := plain(m.View()); !strings.Contains(v, "played the message from Alice") {
+		t.Fatalf("not played:\n%s", v)
+	}
+	if len(fb.CallsTo("http", "download")) != 1 {
+		t.Error("recording not downloaded")
+	}
+	if c := fb.CallsTo("x_tam", "MarkMessage"); len(c) != 1 || !strings.Contains(c[0].Body, "<NewMarkedAsRead>1<") {
+		t.Errorf("new message not marked heard: %+v", c)
+	}
+	t.Setenv("FB_PLAYER", "false")
+	m = press(t, m, "p")
+	if v := plain(m.View()); !strings.Contains(v, "false:") {
+		t.Fatalf("player error not shown:\n%s", v)
+	}
+}

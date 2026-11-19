@@ -108,3 +108,32 @@ func TestCLICallBlocking(t *testing.T) {
 		}
 	}
 }
+
+func TestCLITamPlay(t *testing.T) {
+	fb, run := setupCLI(t)
+	dir := t.TempDir()
+	out, err := run("tam", "play", "0:0", "-o", filepath.Join(dir, "msg"))
+	if err != nil || !strings.Contains(out, "msg.wav") || !strings.Contains(out, "Alice") {
+		t.Fatalf("save: %v\n%s", err, out)
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "msg.wav")); !strings.HasPrefix(string(data), "RIFF") {
+		t.Errorf("saved data: %q", data)
+	}
+	t.Setenv("FB_PLAYER", "true") // a player that succeeds without sound
+	if out, err = run("tam", "play", "0:0"); err != nil || !strings.Contains(out, "playing Alice") {
+		t.Fatalf("play: %v\n%s", err, out)
+	}
+	if m := fb.CallsTo("x_tam", "MarkMessage"); len(m) != 1 || !strings.Contains(m[0].Body, "<NewMarkedAsRead>1</NewMarkedAsRead>") {
+		t.Errorf("new message should be marked heard after playing: %+v", m)
+	}
+	if _, err = run("tam", "play", "0:1"); err != nil {
+		t.Fatal(err)
+	}
+	if m := fb.CallsTo("x_tam", "MarkMessage"); len(m) != 1 {
+		t.Errorf("a heard message must not be marked again: %d", len(m))
+	}
+	t.Setenv("FB_PLAYER", "false")
+	if _, err = run("tam", "play", "0:0", "--keep-new"); err == nil {
+		t.Error("a failing player should be reported")
+	}
+}

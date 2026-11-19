@@ -71,6 +71,7 @@ type Message struct {
 	Called   string    `json:"called"`
 	Duration string    `json:"duration"`
 	New      bool      `json:"new"`
+	Path     string    `json:"path,omitempty"` // recording on the box, e.g. /data/tam/rec/rec.0.000
 }
 
 // ParseMessages parses the message list XML behind GetMessageList.
@@ -85,6 +86,7 @@ func ParseMessages(data []byte, loc *time.Location) ([]Message, error) {
 			Name     string `xml:"Name"`
 			New      string `xml:"New"`
 			Number   string `xml:"Number"`
+			Path     string `xml:"Path"`
 		} `xml:"Message"`
 	}
 	if err := xml.Unmarshal(data, &l); err != nil {
@@ -95,7 +97,7 @@ func ParseMessages(data []byte, loc *time.Location) ([]Message, error) {
 		d, _ := time.ParseInLocation(callDateLayout, strings.TrimSpace(m.Date), loc)
 		out = append(out, Message{
 			TAM: m.Tam, Index: m.Index, Date: d, Number: m.Number, Name: m.Name,
-			Called: m.Called, Duration: m.Duration, New: bool01(m.New),
+			Called: m.Called, Duration: m.Duration, New: bool01(m.New), Path: strings.TrimSpace(m.Path),
 		})
 	}
 	return out, nil

@@ -95,6 +95,20 @@ func New() *Box {
 		io.WriteString(w, deviceLog)
 	})
 	mux.HandleFunc("/backup.export", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, BackupData) })
+	mux.HandleFunc("/download.lua", func(w http.ResponseWriter, r *http.Request) {
+		b.mu.Lock()
+		b.Calls = append(b.Calls, Call{Service: "http", Action: "download", Body: r.URL.RawQuery})
+		b.mu.Unlock()
+		if r.URL.Query().Get("sid") != "deadbeef" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		if !strings.HasPrefix(r.URL.Query().Get("path"), "/data/tam/rec/") {
+			http.NotFound(w, r)
+			return
+		}
+		io.WriteString(w, Recording)
+	})
 	mux.HandleFunc("/tamcalls.xml", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, tamMessages) })
 	mux.HandleFunc("/phonebook.lua", b.servePhonebook)
 	mux.HandleFunc("/callbarring.lua", b.serveBarring)
@@ -550,8 +564,11 @@ const meshList = `{"schema_version":"5.5","nodes":[
 // BackupData is what the fake serves as configuration export.
 const BackupData = "**** FRITZ!Box 7590 AX CONFIGURATION EXPORT\nPassword=$$$$ENCRYPTED\n**** END OF EXPORT\n"
 
+// Recording is the audio the fake serves for answering machine messages (a WAV header only).
+const Recording = "RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x40\x1f\x00\x00\x80\x3e\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
+
 const tamMessages = `<?xml version="1.0" encoding="utf-8"?>
-<Root><Message><Index>0</Index><Tam>0</Tam><Called>030999</Called><Date>12.11.26 09:15</Date><Duration>0:01</Duration><Inbook>1</Inbook><Name>Alice</Name><New>1</New><Number>01701234567</Number><Path>/download.lua?path=/data/tam/rec/rec.0.000</Path></Message>
+<Root><Message><Index>0</Index><Tam>0</Tam><Called>030999</Called><Date>12.11.26 09:15</Date><Duration>0:01</Duration><Inbook>1</Inbook><Name>Alice</Name><New>1</New><Number>01701234567</Number><Path>/data/tam/rec/rec.0.000</Path></Message>
 <Message><Index>1</Index><Tam>0</Tam><Called>030999</Called><Date>13.11.26 18:40</Date><Duration>0:02</Duration><Inbook>0</Inbook><Name></Name><New>0</New><Number>0301112223</Number><Path>/download.lua?path=/data/tam/rec/rec.0.001</Path></Message></Root>`
 
 const templateList = `<templatelist version="1"><template identifier="tmp6F0093-39512EE15" id="60008" functionbitmask="320" applymask="256"><name>Guest WLAN on</name><devices></devices><applymask><guest_wlan/></applymask></template><template identifier="tmp6F0093-3951300C0" id="60009" functionbitmask="320" applymask="1"><name>Heating holiday</name><devices><device identifier="11960 0012345"/></devices></template></templatelist>`
