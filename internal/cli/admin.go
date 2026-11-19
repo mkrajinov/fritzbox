@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/mkrajinov/fritzbox/internal/config"
 	"github.com/mkrajinov/fritzbox/internal/fritz"
 	"github.com/mkrajinov/fritzbox/internal/ui"
 )
@@ -169,7 +170,9 @@ func backupCmd(a *app) *cobra.Command {
 		Short: "Save an encrypted configuration export (restore it in the web UI)",
 		Long: "Downloads the box configuration, encrypted with a password you choose. You need the same\n" +
 			"password to restore it under System > Backup in the web UI. The password is read from\n" +
-			"FB_BACKUP_PASSWORD or asked for on the terminal.",
+			"FB_BACKUP_PASSWORD, the keychain (`fb backup password set`) or asked for on the terminal.\n\n" +
+			"For regular backups with rotation use `fb backup run --keep 30`, e.g. scheduled with\n" +
+			"`fb service install backup --every 24h`.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			pw, err := a.backupPassword()
 			if err != nil {
@@ -207,16 +210,27 @@ func backupCmd(a *app) *cobra.Command {
 	}
 	cmd.Flags().StringVarP(&out, "output", "o", "", "file to write (default fritzbox-<router>-<date>.export)")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing file")
+	cmd.AddCommand(backupSubCmds(a)...)
 	return cmd
 }
 
+// backupPassword: $FB_BACKUP_PASSWORD → keychain (fb backup password set) → prompt.
 func (a *app) backupPassword() (string, error) {
 	if pw := os.Getenv("FB_BACKUP_PASSWORD"); pw != "" {
 		return pw, nil
 	}
+	if name, err := a.profileName(); err == nil {
+		if pw, err := config.BackupPassword(name); err == nil && pw != "" {
+			return pw, nil
+		}
+	}
+	return a.promptBackupPassword()
+}
+
+func (a *app) promptBackupPassword() (string, error) {
 	fd := int(os.Stdin.Fd())
 	if !term.IsTerminal(fd) {
-		return "", errors.New("set FB_BACKUP_PASSWORD (stdin is not a terminal)")
+		return "", errors.New("set FB_BACKUP_PASSWORD or store one with `fb backup password set` (stdin is not a terminal)")
 	}
 	read := func(prompt string) (string, error) {
 		fmt.Fprint(a.err, prompt)

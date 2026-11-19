@@ -103,7 +103,10 @@ fb forward [on|off <id>]                       call forwarding rules (created in
 fb dial <number|contact> [--phone NAME] | fb hangup   dialing help: rings your phone, then calls
 fb home templates | apply <template>           smart home templates (e.g. guest WLAN on)
 fb update [check | install | auto notify|important|all]   firmware
-fb backup [-o file]                            encrypted config export ($FB_BACKUP_PASSWORD or prompt)
+fb backup [-o file]                            encrypted config export ($FB_BACKUP_PASSWORD, keychain or prompt)
+fb backup password set|clear                   keep the backup password in the keychain
+fb backup run [--keep 30] [--dir D] [--always] save into the backup folder unless unchanged, delete old ones
+fb backup list | diff [old] [new]              saved backups; what changed (default: the last two)
 fb dhcp [range <first> <last>]                 DHCP server and address range
 fb remote [https|letsencrypt|myfritz on|off]   internet access to the box, DynDNS status
 fb watch [--interval 30s] [--no-notify]        desktop notifications: new device, internet down/up,
@@ -141,7 +144,8 @@ Tabs: Overview · Hosts · Mesh · WLAN · Calls · Contacts · Phone · Smart H
 - Smart Home: `space` switch (thermostat: off ↔ 20 °C) or run a template, `+`/`-` thermostat.
 - Log: `g` cycle all/sys/net/fon/wlan/usb.
 - System: firmware `u` check, `I` install, `a` auto mode; `e` DHCP range; `H`/`L`/`M` remote HTTPS,
-  Let's Encrypt, MyFRITZ; `b` encrypted backup to the current directory.
+  Let's Encrypt, MyFRITZ; `b` encrypted backup into the backup folder (uses the stored backup
+  password, otherwise asks).
 
 CLI only, on purpose: `router …` (password prompt and keychain), `raw`, `exporter`, `watch`, `completion`.
 

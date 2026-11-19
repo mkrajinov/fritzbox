@@ -161,3 +161,30 @@ func DeletePassword(name string) error {
 	}
 	return err
 }
+
+// Backup passwords live in the keychain under "backup:<router>", so scheduled backups can run
+// without a prompt and without the password in a service file.
+func backupAccount(router string) string { return "backup:" + router }
+
+// StoreBackupPassword saves the password used to encrypt configuration exports of a router.
+func StoreBackupPassword(router, pw string) error {
+	return keyring.Set(keyringService, backupAccount(router), pw)
+}
+
+// BackupPassword returns the stored backup password, or "" when there is none.
+func BackupPassword(router string) (string, error) {
+	pw, err := keyring.Get(keyringService, backupAccount(router))
+	if errors.Is(err, keyring.ErrNotFound) {
+		return "", nil
+	}
+	return pw, err
+}
+
+// DeleteBackupPassword removes the stored backup password (missing entries are not an error).
+func DeleteBackupPassword(router string) error {
+	err := keyring.Delete(keyringService, backupAccount(router))
+	if errors.Is(err, keyring.ErrNotFound) {
+		return nil
+	}
+	return err
+}

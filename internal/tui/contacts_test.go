@@ -113,3 +113,25 @@ func TestPlayVoicemail(t *testing.T) {
 		t.Fatalf("player error not shown:\n%s", v)
 	}
 }
+
+func TestBackupIntoFolder(t *testing.T) {
+	m, _ := setup(t)
+	dir := t.TempDir()
+	mm := m.(Model)
+	mm.opt.BackupDir = dir
+	mm.opt.BackupPassword = func(string) string { return "secret" }
+	m = press(t, mm, "0", "b")
+	if v := plain(m.View()); !strings.Contains(v, "backup saved to "+dir) {
+		t.Fatalf("not saved:\n%s", v)
+	}
+	m = press(t, m, "b")
+	if v := plain(m.View()); !strings.Contains(v, "configuration unchanged since home-") {
+		t.Fatalf("second backup should be skipped:\n%s", v)
+	}
+	mm = m.(Model)
+	mm.opt.BackupPassword = nil
+	m = press(t, mm, "b")
+	if v := plain(m.View()); !strings.Contains(v, "Backup password") {
+		t.Fatalf("no password prompt without a stored password:\n%s", v)
+	}
+}

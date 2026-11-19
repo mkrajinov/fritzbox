@@ -46,6 +46,7 @@ type Box struct {
 	Target    int                          // thermostat target
 	Blocked   map[string]bool              // IP → internet blocked (X_AVM-DE_HostFilter)
 	HostList  string                       // overrides the default host list XML when set
+	Export    string                       // configuration export served for backups (default BackupData)
 	Books     map[int]*Book                // phonebooks by id
 	Barring   []string                     // call block list entries (<contact> XML)
 	nextUID   int
@@ -64,7 +65,7 @@ const AuthToken = "2C0A2110-0000-4000-8000-FAKE00000001"
 
 // New starts the fake box.
 func New() *Box {
-	b := &Box{Responses: defaultResponses(), Faults: map[string]int{}, Plug: "1", Target: 42, Blocked: map[string]bool{}, NeedsToken: map[string]bool{}, Books: defaultBooks(), nextUID: 100}
+	b := &Box{Responses: defaultResponses(), Faults: map[string]int{}, Plug: "1", Target: 42, Blocked: map[string]bool{}, NeedsToken: map[string]bool{}, Books: defaultBooks(), nextUID: 100, Export: BackupData}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/tr64desc.xml", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, desc) })
 	mux.HandleFunc("/upnp/control/", func(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +95,12 @@ func New() *Box {
 		b.mu.Unlock()
 		io.WriteString(w, deviceLog)
 	})
-	mux.HandleFunc("/backup.export", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, BackupData) })
+	mux.HandleFunc("/backup.export", func(w http.ResponseWriter, _ *http.Request) {
+		b.mu.Lock()
+		data := b.Export
+		b.mu.Unlock()
+		io.WriteString(w, data)
+	})
 	mux.HandleFunc("/download.lua", func(w http.ResponseWriter, r *http.Request) {
 		b.mu.Lock()
 		b.Calls = append(b.Calls, Call{Service: "http", Action: "download", Body: r.URL.RawQuery})
@@ -572,6 +578,13 @@ const tamMessages = `<?xml version="1.0" encoding="utf-8"?>
 <Message><Index>1</Index><Tam>0</Tam><Called>030999</Called><Date>13.11.26 18:40</Date><Duration>0:02</Duration><Inbook>0</Inbook><Name></Name><New>0</New><Number>0301112223</Number><Path>/download.lua?path=/data/tam/rec/rec.0.001</Path></Message></Root>`
 
 const templateList = `<templatelist version="1"><template identifier="tmp6F0093-39512EE15" id="60008" functionbitmask="320" applymask="256"><name>Guest WLAN on</name><devices></devices><applymask><guest_wlan/></applymask></template><template identifier="tmp6F0093-3951300C0" id="60009" functionbitmask="320" applymask="1"><name>Heating holiday</name><devices><device identifier="11960 0012345"/></devices></template></templatelist>`
+
+// SetExport replaces the configuration export the fake serves.
+func (b *Box) SetExport(data string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.Export = data
+}
 
 // SetHostList replaces the host list XML served to clients ("" restores the default).
 func (b *Box) SetHostList(xml string) {

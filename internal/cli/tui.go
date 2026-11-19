@@ -2,10 +2,12 @@ package cli
 
 import (
 	"context"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
+	"github.com/mkrajinov/fritzbox/internal/config"
 	"github.com/mkrajinov/fritzbox/internal/tui"
 )
 
@@ -45,7 +47,13 @@ func runTUI(cmd *cobra.Command, a *app) error {
 		}
 		return b, r.Host, nil
 	}
-	m := tui.New(tui.Options{Routers: names, Current: current, Connect: connect})
+	m := tui.New(tui.Options{Routers: names, Current: current, Connect: connect, BackupPassword: func(router string) string {
+		if pw := os.Getenv("FB_BACKUP_PASSWORD"); pw != "" {
+			return pw
+		}
+		pw, _ := config.BackupPassword(router)
+		return pw
+	}})
 	_, err = tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(cmd.Context())).Run()
 	return err
 }

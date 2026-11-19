@@ -67,7 +67,7 @@ Legend: ✅ implemented in fb · ○ documented, not implemented · ✗ not avai
 |---|---|---|
 | Status, reboot, reconnect, event log | ✅ | `DeviceInfo:1`, `DeviceConfig:1`, `X_AVM-DE_GetDeviceLogPath` |
 | Firmware check and update, auto mode | ✅ `fb update`, TUI System | `UserInterface:1` `X_AVM-DE_CheckUpdate`, `X_AVM-DE_DoUpdate` |
-| Config backup | ✅ `fb backup`, TUI System `b` (restore: web UI) | `DeviceConfig:1` `X_AVM-DE_GetConfigFile` (NewX_AVM-DE_Password) → URL valid for under 30 s |
+| Config backup, rotation and diff | ✅ `fb backup`, `fb backup run/list/diff`, TUI System `b` (restore: web UI) | `DeviceConfig:1` `X_AVM-DE_GetConfigFile` (NewX_AVM-DE_Password) → URL valid for under 30 s |
 | NTP, UPnP, NAS/FTP/SMB, file links | ○ | `Time:1`, `X_AVM-DE_UPnP:1`, `X_AVM-DE_Storage:1`, `X_AVM-DE_Filelinks:1` |
 | Smart home switch and thermostat | ✅ | AHA `homeautoswitch.lua` |
 | Smart home templates (e.g. guest WLAN template) | ✅ `fb home templates/apply`, TUI Smart Home | AHA `gettemplatelistinfos`, `applytemplate`, `settriggeractive` |

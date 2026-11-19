@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/mkrajinov/fritzbox/internal/aha"
+	"github.com/mkrajinov/fritzbox/internal/backups"
 	"github.com/mkrajinov/fritzbox/internal/fritz"
 	"github.com/mkrajinov/fritzbox/internal/ui"
 )
@@ -566,23 +566,44 @@ func (m Model) systemKey(key string) (Model, tea.Cmd, bool) {
 		}), true
 	case "b":
 		name := m.routerName()
-		m.input = newInput("Backup password", "encrypts the export; you need it to restore in the web UI · enter = save · esc = cancel", "",
+		dir := m.opt.BackupDir
+		if dir == "" {
+			d, err := backups.DefaultDir(name)
+			if err != nil {
+				m.flash, m.flashOK = err.Error(), false
+				return m, nil, true
+			}
+			dir = d
+		}
+		save := func(m *Model, pw string) tea.Cmd {
+			b, gen := m.backend, m.gen
+			m.flash, m.flashOK = "saving backup…", true
+			return func() tea.Msg {
+				c, cancel := ctx()
+				defer cancel()
+				data, err := b.Backup(c, pw)
+				if err != nil {
+					return actionMsg{gen: gen, err: err, refresh: tabSystem}
+				}
+				path, unchanged, err := backups.Save(dir, name, data, time.Now(), true)
+				text := "backup saved to " + path
+				if unchanged {
+					text = "configuration unchanged since " + filepath.Base(path) + ", nothing saved"
+				}
+				return actionMsg{gen: gen, text: text, err: err, refresh: tabSystem}
+			}
+		}
+		if f := m.opt.BackupPassword; f != nil {
+			if pw := f(name); pw != "" {
+				return m, save(&m, pw), true
+			}
+		}
+		m.input = newInput("Backup password", "encrypts the export; you need it to restore in the web UI · store it with `fb backup password set` · enter = save · esc = cancel", "",
 			func(m *Model, v string) (tea.Cmd, error) {
 				if len(v) < 4 {
 					return nil, fmt.Errorf("at least 4 characters")
 				}
-				path := fmt.Sprintf("fritzbox-%s-%s.export", name, time.Now().Format("20060102-1504"))
-				b, gen := m.backend, m.gen
-				return func() tea.Msg {
-					c, cancel := ctx()
-					defer cancel()
-					data, err := b.Backup(c, v)
-					if err == nil {
-						err = os.WriteFile(path, data, 0o600)
-					}
-					abs, _ := filepath.Abs(path)
-					return actionMsg{gen: gen, text: "backup saved to " + abs, err: err, refresh: tabSystem}
-				}, nil
+				return save(m, v), nil
 			})
 		m.input.ti.EchoMode = textinput.EchoPassword
 		return m, textinput.Blink, true
@@ -706,7 +727,7 @@ func (m Model) systemView(w int) string {
 		)
 	}
 	out += "\n" + ui.Card("Remote access · H https · L Let's Encrypt · M MyFRITZ", strings.Join(rem, "\n"), w)
-	out += "\n" + ui.Card("Backup", row("⇩", "b  save an encrypted configuration export", "written to the current directory"), w)
+	out += "\n" + ui.Card("Backup", row("⇩", "b  save an encrypted configuration export", "into the backup folder, see fb backup list / diff"), w)
 	return out
 }
 

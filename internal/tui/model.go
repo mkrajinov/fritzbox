@@ -70,6 +70,9 @@ type Options struct {
 	Connect   Connector
 	NoCallmon bool   // tests
 	StateDir  string // where fb watch keeps presence data; empty = the default (tests override)
+	BackupDir string // folder for backups; empty = backups.DefaultDir(router)
+	// BackupPassword returns the stored backup password of a router ("" = ask).
+	BackupPassword func(router string) string
 }
 
 // Model is the root Bubble Tea model.
