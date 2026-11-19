@@ -20,13 +20,21 @@ With `go install`, add the short name yourself: `ln -s fritzbox "$(go env GOPATH
 
 ## Releasing
 
-Push a version tag. The `release` workflow runs the tests, builds macOS and Linux archives with
-GoReleaser, creates the GitHub release and updates the formula in
-[mkrajinov/homebrew-tap](https://github.com/mkrajinov/homebrew-tap):
+Releases are automatic. On every push to `main`, the `release` workflow looks at the
+[Conventional Commits](https://www.conventionalcommits.org) since the last tag and picks the next
+version:
 
-```sh
-git tag v0.1.0 && git push origin v0.1.0
-```
+| Commits since the last tag | Next version |
+|---|---|
+| `feat:` | minor: v0.1.0 → v0.2.0 |
+| `fix:`, `perf:` | patch: v0.1.0 → v0.1.1 |
+| `feat!:` or a `BREAKING CHANGE:` footer | major: v1.2.3 → v2.0.0 (before v1: minor) |
+| only `docs:`, `ci:`, `build:`, `test:`, `chore:`, `refactor:`, `style:` | no release |
+
+If there is a new version, it runs the tests, tags the commit, builds macOS and Linux archives
+with GoReleaser, creates the GitHub release and updates the formula in
+[mkrajinov/homebrew-tap](https://github.com/mkrajinov/homebrew-tap). Check what the next push would
+release with `./scripts/next-version.sh`. Pushing a `v*` tag by hand also releases it.
 
 Dry run locally: `goreleaser release --snapshot --clean` (output in `dist/`).
 
