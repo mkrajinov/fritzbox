@@ -116,6 +116,8 @@ fb watch [--interval 30s] [--no-notify]        desktop notifications: new device
 fb seen [device] [--home]                      who is home and since when (data from fb watch)
 fb raw services | actions <svc> | call <svc> <action> Name=value...
 fb exporter [--listen 127.0.0.1:9133]          Prometheus metrics for all profiles on /metrics
+fb service install watch|exporter|backup [--every 24h] [-- job flags]   run in the background
+fb service list | status <job> | logs <job> [-f] | uninstall <job>
 fb tui                                         also the default with no args in a terminal
 ```
 
@@ -147,7 +149,7 @@ Tabs: Overview · Hosts · Mesh · WLAN · Calls · Contacts · Phone · Smart H
   Let's Encrypt, MyFRITZ; `b` encrypted backup into the backup folder (uses the stored backup
   password, otherwise asks).
 
-CLI only, on purpose: `router …` (password prompt and keychain), `raw`, `exporter`, `watch`, `completion`.
+CLI only, on purpose: `router …` (password prompt and keychain), `raw`, `exporter`, `watch`, `service`, `completion`.
 
 Live rates are polled every 3 s with at most one request in flight per router; full status every 30 s.
 
@@ -199,6 +201,27 @@ mqtt:
 
 Sends run in the background, in order, with a 10 s timeout. A failing target is reported once, and
 again when it recovers. Error messages never include the URL.
+
+## Background services
+
+`fb service` installs `watch`, `exporter` and scheduled backups as user services: launchd agents
+on macOS (`~/Library/LaunchAgents/io.github.mkrajinov.fritzbox.<job>.plist`, logs in
+`~/Library/Logs/fritzbox/`), systemd user units on Linux (`~/.config/systemd/user/fritzbox-<job>.*`,
+logs with `journalctl --user`). They start at login and restart when they stop.
+
+```sh
+fb service install watch -- --track anna-phone --ntfy https://ntfy.sh/my-topic
+fb service install exporter
+fb backup password set && fb service install backup --every 24h -- --keep 30
+fb service status watch && fb service logs watch -f
+```
+
+With `-r <router>` the job is bound to that profile and named `<job>-<router>`, so each router can
+have its own. Secrets from the environment (`FB_NTFY_TOKEN`, `FB_MQTT_PASSWORD`, `FRITZ_PASSWORD`, …)
+are copied into the plist or a systemd `EnvironmentFile`, both readable only by you; the router and
+backup passwords otherwise come from the keychain. Homebrew installs are referenced through
+`/opt/homebrew/opt/fritzbox`, so services survive `brew upgrade`. On Linux, `loginctl enable-linger
+$USER` keeps them running while you are logged out; `--dry-run` prints the files instead.
 
 ## Second factor
 
