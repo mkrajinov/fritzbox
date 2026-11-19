@@ -1,0 +1,46 @@
+# Prometheus and Grafana for `fritzbox exporter`, with the FRITZ!Box dashboard loaded.
+#
+#   fritzbox exporter            (or: fritzbox service install exporter)
+#   docker compose up -d         in this folder
+#   open http://localhost:3000   (admin / admin, then pick a new password)
+#
+# The exporter runs on the host. Prometheus reaches it at host.docker.internal:9133; on Linux
+# start the exporter with --listen 0.0.0.0:9133 (or the docker0 address, 172.17.0.1:9133).
+name: fritzbox-monitoring
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=${RETENTION:-180d}
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.6
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/fritzbox.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./provisioning:/etc/grafana/provisioning:ro
+      - ../../docs/grafana-dashboard.json:/var/lib/grafana/dashboards/fritzbox.json:ro
+      - grafana:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  prometheus:
+  grafana:

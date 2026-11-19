@@ -232,8 +232,23 @@ the instructions and esc cancels. Nothing to configure.
 
 ## Grafana
 
-[docs/grafana-dashboard.json](docs/grafana-dashboard.json) is a dashboard for `fb exporter` (import it
-and pick your Prometheus data source).
+[deploy/grafana](deploy/grafana) runs Prometheus and Grafana in Docker with the FRITZ!Box dashboard
+already loaded. The exporter runs on the host:
+
+```sh
+fb service install exporter          # or run `fb exporter` in a terminal
+cd deploy/grafana && docker compose up -d
+open http://localhost:3000           # admin / admin, Grafana asks for a new password
+```
+
+Prometheus keeps 180 days (`RETENTION=1y docker compose up -d` to change it); both UIs listen on
+127.0.0.1 only. On Linux, containers can't reach an exporter on 127.0.0.1: start it with
+`--listen 172.17.0.1:9133` (the docker0 address) or `0.0.0.0:9133` behind a firewall.
+`docker compose down` stops it, `down -v` also deletes the stored metrics.
+
+To use your own Grafana, import [docs/grafana-dashboard.json](docs/grafana-dashboard.json) and pick
+your Prometheus data source. Without a router, `go run ./internal/fakebox/fakeboxd` serves the fake box
+used by the tests and prints how to point fritzbox at it.
 
 ## Roadmap
 
