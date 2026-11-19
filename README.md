@@ -115,6 +115,7 @@ fb watch [--interval 30s] [--no-notify]        desktop notifications: new device
          [--webhook URL] [--ntfy URL] [--mqtt mqtt://user@host]   forward events (see below)
 fb seen [device] [--home]                      who is home and since when (data from fb watch)
 fb raw services | actions <svc> | call <svc> <action> Name=value...
+fb capture [-o dir] [--hide-device-names]      save scrubbed answers to read-only requests as test data
 fb exporter [--listen 127.0.0.1:9133]          Prometheus metrics for all profiles on /metrics
 fb service install watch|exporter|backup [--every 24h] [-- job flags]   run in the background
 fb service list | status <job> | logs <job> [-f] | uninstall <job>
@@ -256,7 +257,7 @@ See [docs/capabilities.md](docs/capabilities.md) for everything the box exposes 
 
 - Not possible through documented APIs: per-host static IP (DHCP reservation), WireGuard, port
   forwards for other hosts. They would need the undocumented web UI requests.
-- Replace hand-written fixtures with captures from a real box.
+- Replace hand-written fixtures with captures from a real box (`fb capture`, see below).
 
 ## Development
 
@@ -273,21 +274,27 @@ Layout: `internal/tr064` (SOAP + digest + TLS pinning) · `internal/aha` (smart 
 
 ### Not yet verified against a real box
 
-The fixtures follow AVM's documentation and fritzconnection's parsers; these points still need a
-check on live hardware (capture with `fb -v raw call …`, scrub secrets, add to `internal/fakebox`):
+`fb capture` calls a fixed list of read-only actions, downloads the lists they point to, replaces
+session IDs, passwords, serial numbers, MACs, public IPs, phone numbers, contact names, emails and
+SSIDs with consistent placeholders, and runs fb's parsers over the result (README.txt in the folder).
+After reviewing a capture, copy it to `internal/capture/testdata/<model>/`; `go test ./internal/capture`
+then parses it on every run.
 
-- unit of `X_AVM-DE_GetOnlineMonitor` `Newus/ds_current_bps` (treated as bytes/s)
+The fixtures follow AVM's documentation and fritzconnection's parsers; these points still need a
+check on live hardware (`fb capture` covers the ones marked ✱):
+
+- ✱ unit of `X_AVM-DE_GetOnlineMonitor` `Newus/ds_current_bps` (treated as bytes/s)
 - `NewX_AVM-DE_FrequencyBand` in `WLANConfiguration.GetInfo` (falls back to the channel number)
 - `X_AVM_DE_GetExternalIPv6Address` on the TR-064 connection service (best effort, hidden if missing)
 - the second-factor flow end to end (codes, states, `NewMethods` format and the token header follow AVM's
   Authentication PDF; the box's action list was checked against its SCPD)
-- the format of `GetFilterProfiles` (parsed loosely: XML items with ID/Name, or `id:name` pairs)
+- ✱ the format of `GetFilterProfiles` (parsed loosely: XML items with ID/Name, or `id:name` pairs)
 - `SetChannel` with 0 for automatic channel selection
-- the XML behind `X_AVM-DE_GetWLANDeviceListPath` (parsed loosely by element-name suffix) and the unit
+- ✱ the XML behind `X_AVM-DE_GetWLANDeviceListPath` (parsed loosely by element-name suffix) and the unit
   of `X_AVM-DE_SignalStrength` (shown as 0–100). Check with
   `fb -v raw call WLANConfiguration1 X_AVM-DE_GetWLANDeviceListPath` and open the returned path
 - the absolute URL `X_AVM-DE_GetConfigFile` returns (fb rewrites the host to the configured address)
-- the entry XML of `GetPhonebookEntryUID` (fb edits it as an XML tree and keeps unknown elements) and
+- ✱ (download formats only) the entry XML of `GetPhonebookEntryUID` (fb edits it as an XML tree and keeps unknown elements) and
   the error code online phonebooks return on writes; the call block list download
   (`GetCallBarringList`, assumed to use the phonebook format)
 - voicemail download: `/download.lua?path=<Path>&sid=<sid of the message list URL>` on the server of the
