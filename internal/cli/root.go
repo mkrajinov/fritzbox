@@ -79,8 +79,8 @@ func NewRoot() *cobra.Command { return newRoot(os.Stdout, os.Stderr) }
 func newRoot(out, errOut io.Writer) *cobra.Command {
 	a := &app{out: out, err: errOut}
 	root := &cobra.Command{
-		Use:           "fb",
-		Short:         "Manage AVM FRITZ!Box routers from the terminal (CLI + TUI)",
+		Use:           "fritzbox",
+		Short:         "Manage AVM FRITZ!Box routers from the terminal (CLI + TUI). Short name: fb",
 		Version:       Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,

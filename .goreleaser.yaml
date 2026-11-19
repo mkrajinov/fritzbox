@@ -2,7 +2,7 @@
 # builds the archives, creates the GitHub release and updates the Homebrew tap.
 # Local dry run: goreleaser release --snapshot --clean
 version: 2
-project_name: fb
+project_name: fritzbox
 # Always GitHub, even when GITLAB_TOKEN is set in the environment.
 force_token: github
 
@@ -12,8 +12,8 @@ before:
     - ./scripts/completions.sh
 
 builds:
-  - main: ./cmd/fb
-    binary: fb
+  - main: ./cmd/fritzbox
+    binary: fritzbox
     env: [CGO_ENABLED=0]
     goos: [darwin, linux]
     goarch: [amd64, arm64]
@@ -36,26 +36,29 @@ changelog:
   filters:
     exclude: ["^docs:", "^test:", "^chore:"]
 
-homebrew_casks:
-  - name: fb
-    binaries: [fb]
+# A formula (plain `brew install`, macOS and Linux). It installs the prebuilt binary from the
+# release, links fb to fritzbox and installs the completions for both names.
+# GoReleaser marks brews as deprecated in favour of casks, so `goreleaser check` reports it;
+# it keeps working throughout v2, which release.yml pins.
+brews:
+  - name: fritzbox
     homepage: https://github.com/mkrajinov/fritzbox
     description: CLI and TUI to manage AVM FRITZ!Box routers
-    completions:
-      bash: completions/fb.bash
-      zsh: completions/fb.zsh
-      fish: completions/fb.fish
-    # The binaries are not signed or notarized; without this macOS refuses to run them.
-    hooks:
-      post:
-        install_steps: |
-          on_macos do
-            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/fb"]
-          end
+    directory: Formula
+    install: |
+      bin.install "fritzbox"
+      bin.install_symlink "fritzbox" => "fb"
+      bash_completion.install "completions/fritzbox.bash" => "fritzbox"
+      bash_completion.install "completions/fb.bash" => "fb"
+      zsh_completion.install "completions/_fritzbox"
+      fish_completion.install "completions/fritzbox.fish", "completions/fb.fish"
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/fritzbox --version")
+      assert_match version.to_s, shell_output("#{bin}/fb --version")
     commit_author:
       name: Muhamed Krajinovic
       email: muhamed.krajinovic@gmail.com
-    commit_msg_template: "fb {{ .Tag }}"
+    commit_msg_template: "fritzbox {{ .Tag }}"
     repository:
       owner: mkrajinov
       name: homebrew-tap

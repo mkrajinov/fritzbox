@@ -1,4 +1,4 @@
-// Command fb manages AVM FRITZ!Box routers from the terminal.
+// Command fritzbox (short: fb) manages AVM FRITZ!Box routers from the terminal.
 package main
 
 import (

@@ -1,25 +1,27 @@
-# fb
+# fritzbox
 
 One Go binary to manage AVM FRITZ!Box routers: a scriptable CLI and an interactive TUI.
 It covers what the Python `fritzconnection` tools do (`fritzstatus`, `fritzhosts`, `fritzwlan`,
 `fritzcall`, `fritzphonebook`, `fritzhomeauto`, `fritzmonitor`, `fritzconnection -s/-a`)
 and adds named router profiles.
 
+The command is `fritzbox`; `fb` is its short name and is used in the examples below.
+
 ## Install
 
 ```sh
-brew install --cask mkrajinov/tap/fb     # macOS (Apple silicon and Intel), Linux
-# or: go install github.com/mkrajinov/fritzbox/cmd/fb@latest
-# or from a checkout: make build          # → bin/fb
+brew install mkrajinov/tap/fritzbox     # macOS and Linux, Apple silicon/ARM and Intel
+# or: go install github.com/mkrajinov/fritzbox/cmd/fritzbox@latest   (installs only fritzbox)
+# or from a checkout: make build         # → bin/fritzbox and bin/fb
 ```
 
-Homebrew also installs bash, zsh and fish completions. The binaries are not signed by Apple; the
-cask removes the download quarantine flag so macOS runs them.
+Homebrew installs both `fritzbox` and `fb`, plus bash, zsh and fish completions for both names.
+With `go install`, add the short name yourself: `ln -s fritzbox "$(go env GOPATH)/bin/fb"`.
 
 ## Releasing
 
 Push a version tag. The `release` workflow runs the tests, builds macOS and Linux archives with
-GoReleaser, creates the GitHub release and updates the cask in
+GoReleaser, creates the GitHub release and updates the formula in
 [mkrajinov/homebrew-tap](https://github.com/mkrajinov/homebrew-tap):
 
 ```sh
