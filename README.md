@@ -62,6 +62,8 @@ fb router test        # checks login and every permission, one line per feature
 
 Config lives in `~/.config/fbctl/config.yaml` (`$FBCTL_CONFIG` overrides). It never holds passwords.
 Password lookup order: OS keychain → `$FRITZ_PASSWORD` → `password_cmd` (e.g. `op read op://…`).
+On Linux without a Secret Service (servers, SSH sessions, no `dbus-launch`), stored passwords go to
+`~/.config/fbctl/secrets/` instead, as files only you can read; `fb` prints a warning when it does that.
 Without any profile, `FRITZ_ADDRESS`/`FRITZ_USERNAME`/`FRITZ_PASSWORD` work like in fritzconnection.
 
 ## CLI

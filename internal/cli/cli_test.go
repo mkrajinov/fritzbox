@@ -30,7 +30,7 @@ func setupCLI(t *testing.T) (*fakebox.Box, func(args ...string) (string, error))
 	if err := cfg.Save(); err != nil {
 		t.Fatal(err)
 	}
-	if err := config.StorePassword("home", fakebox.Password); err != nil {
+	if _, err := config.StorePassword("home", fakebox.Password); err != nil {
 		t.Fatal(err)
 	}
 	run := func(args ...string) (string, error) {

@@ -202,10 +202,15 @@ func backupSubCmds(a *app) []*cobra.Command {
 					return err
 				}
 			}
-			if err := config.StoreBackupPassword(router, p); err != nil {
-				return fmt.Errorf("keychain: %w", err)
+			file, err := config.StoreBackupPassword(router, p)
+			if err != nil {
+				return fmt.Errorf("store backup password: %w", err)
 			}
-			fmt.Fprintf(a.out, "backup password for %s stored in the keychain\n", router)
+			if file != "" {
+				fmt.Fprintf(a.out, "no keychain available: backup password for %s stored in %s (readable only by you)\n", router, file)
+			} else {
+				fmt.Fprintf(a.out, "backup password for %s stored in the keychain\n", router)
+			}
 			return nil
 		},
 	}, &cobra.Command{

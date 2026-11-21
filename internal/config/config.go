@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/zalando/go-keyring"
 	"gopkg.in/yaml.v3"
 )
 
@@ -129,11 +128,11 @@ func (c *Config) Resolve(name string) (string, *Router, error) {
 	return name, r, nil
 }
 
-// Password resolves the password: keychain → $FRITZ_PASSWORD → password_cmd.
+// Password resolves the password: keychain (or its file fallback) → $FRITZ_PASSWORD → password_cmd.
 func Password(name string, r *Router) (string, error) {
 	if name != "env" {
-		// Errors (not found, or no keychain on headless Linux) fall through to the other sources.
-		if pw, err := keyring.Get(keyringService, name); err == nil {
+		// Errors fall through to the other sources.
+		if pw, err := readSecret(name); err == nil && pw != "" {
 			return pw, nil
 		}
 	}
@@ -150,41 +149,25 @@ func Password(name string, r *Router) (string, error) {
 	return "", nil
 }
 
-// StorePassword saves the password in the OS keychain.
-func StorePassword(name, pw string) error { return keyring.Set(keyringService, name, pw) }
+// StorePassword saves the password in the OS keychain. Without a usable keychain (headless
+// Linux) it goes to a file readable only by the user; its path is returned in that case.
+func StorePassword(name, pw string) (string, error) { return storeSecret(name, pw) }
 
-// DeletePassword removes the keychain entry (missing entries are not an error).
-func DeletePassword(name string) error {
-	err := keyring.Delete(keyringService, name)
-	if errors.Is(err, keyring.ErrNotFound) {
-		return nil
-	}
-	return err
-}
+// DeletePassword removes the stored password (missing entries are not an error).
+func DeletePassword(name string) error { return deleteSecret(name) }
 
-// Backup passwords live in the keychain under "backup:<router>", so scheduled backups can run
+// Backup passwords are stored under "backup:<router>", so scheduled backups can run
 // without a prompt and without the password in a service file.
 func backupAccount(router string) string { return "backup:" + router }
 
 // StoreBackupPassword saves the password used to encrypt configuration exports of a router.
-func StoreBackupPassword(router, pw string) error {
-	return keyring.Set(keyringService, backupAccount(router), pw)
+// Like StorePassword it returns the file path when there was no keychain.
+func StoreBackupPassword(router, pw string) (string, error) {
+	return storeSecret(backupAccount(router), pw)
 }
 
 // BackupPassword returns the stored backup password, or "" when there is none.
-func BackupPassword(router string) (string, error) {
-	pw, err := keyring.Get(keyringService, backupAccount(router))
-	if errors.Is(err, keyring.ErrNotFound) {
-		return "", nil
-	}
-	return pw, err
-}
+func BackupPassword(router string) (string, error) { return readSecret(backupAccount(router)) }
 
 // DeleteBackupPassword removes the stored backup password (missing entries are not an error).
-func DeleteBackupPassword(router string) error {
-	err := keyring.Delete(keyringService, backupAccount(router))
-	if errors.Is(err, keyring.ErrNotFound) {
-		return nil
-	}
-	return err
-}
+func DeleteBackupPassword(router string) error { return deleteSecret(backupAccount(router)) }

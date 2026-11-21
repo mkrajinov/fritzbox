@@ -99,8 +99,12 @@ func routerAddCmd(a *app) *cobra.Command {
 					return err
 				}
 				if pw != "" {
-					if err := config.StorePassword(name, pw); err != nil {
-						return fmt.Errorf("keychain: %w (use --no-keychain with FRITZ_PASSWORD or --password-cmd)", err)
+					file, err := config.StorePassword(name, pw)
+					if err != nil {
+						return fmt.Errorf("store password: %w (use --no-keychain with FRITZ_PASSWORD or --password-cmd)", err)
+					}
+					if file != "" {
+						fmt.Fprintf(a.err, "warning: no keychain available, password stored in %s (readable only by you)\n", file)
 					}
 				}
 			}
@@ -170,7 +174,7 @@ func routerRemoveCmd(a *app) *cobra.Command {
 				cfg.Default = ""
 			}
 			if err := config.DeletePassword(args[0]); err != nil {
-				fmt.Fprintln(a.err, "warning: keychain:", err)
+				fmt.Fprintln(a.err, "warning: stored password:", err)
 			}
 			return cfg.Save()
 		},
