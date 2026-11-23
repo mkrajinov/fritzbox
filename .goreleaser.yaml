@@ -44,6 +44,7 @@ brews:
   - name: fritzbox
     homepage: https://github.com/mkrajinov/fritzbox
     description: CLI and TUI to manage AVM FRITZ!Box routers
+    license: MIT
     directory: Formula
     install: |
       bin.install "fritzbox"

@@ -1,9 +1,20 @@
 # fritzbox
 
-One Go binary to manage AVM FRITZ!Box routers: a scriptable CLI and an interactive TUI.
+**One binary for your FRITZ!Box**: status, devices, mesh, Wi-Fi, calls, phonebook, answering
+machine, smart home and settings, from the command line or an interactive TUI. Plus a Prometheus
+exporter with a Grafana dashboard, notifications when devices come and go, and encrypted backups
+you can diff. Several routers in named profiles; macOS and Linux.
+
+```sh
+brew install mkrajinov/tap/fritzbox
+```
+
+![fritzbox demo: fb status, fb hosts, fb calls and the TUI](docs/demo.gif)
+
 It covers what the Python `fritzconnection` tools do (`fritzstatus`, `fritzhosts`, `fritzwlan`,
-`fritzcall`, `fritzphonebook`, `fritzhomeauto`, `fritzmonitor`, `fritzconnection -s/-a`)
-and adds named router profiles.
+`fritzcall`, `fritzphonebook`, `fritzhomeauto`, `fritzmonitor`, `fritzconnection -s/-a`) in a
+single command. It talks to the box over AVM's official TR-064 and AHA-HTTP interfaces; nothing
+is installed on the router.
 
 The command is `fritzbox`; `fb` is its short name and is used in the examples below.
 
@@ -306,3 +317,10 @@ Action and argument names for all new features were checked against the SCPD fil
 5590 Fiber (FRITZ!OS 8.25).
 - `LANConfigSecurity1.X_AVM-DE_GetUserList` without credentials (fritzconnection sends credentials; fb tries
   without first, then falls back to the legacy `dslf-config` user)
+
+The demo GIF is recorded against that fake box: `brew install vhs && vhs docs/demo.tape`.
+
+## License
+
+[MIT](LICENSE). Not affiliated with or endorsed by AVM GmbH. FRITZ!Box and FRITZ!OS are
+trademarks of AVM GmbH.
